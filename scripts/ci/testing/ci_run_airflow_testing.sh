@@ -15,125 +15,118 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+# Enable automated tests execution
+RUN_TESTS="true"
+export RUN_TESTS
+
+SKIPPED_FAILED_JOB="Quarantined"
+export SKIPPED_FAILED_JOB
+
+SEMAPHORE_NAME="tests"
+export SEMAPHORE_NAME
+
 # shellcheck source=scripts/ci/libraries/_script_init.sh
-
-
 . "$( dirname "${BASH_SOURCE[0]}" )/../libraries/_script_init.sh"
 
-INTEGRATIONS=()
 
-ENABLED_INTEGRATIONS=${ENABLED_INTEGRATIONS:=""}
 
-if [[ ${TEST_TYPE:=} == "Integration" ]]; then
-    export ENABLED_INTEGRATIONS="${AVAILABLE_INTEGRATIONS}"
-    export RUN_INTEGRATION_TESTS="${AVAILABLE_INTEGRATIONS}"
-elif [[ ${TEST_TYPE:=} == "Long" ]]; then
-    export ONLY_RUN_LONG_RUNNING_TESTS="true"
-elif [[ ${TEST_TYPE:=} == "Heisentests" ]]; then
-    export ONLY_RUN_HEISEN_TESTS="true"
-elif [[ ${TEST_TYPE:=} == "Quarantined" ]]; then
-    export ONLY_RUN_QUARANTINED_TESTS="true"
-    # Do not fail in quarantined tests
-fi
-
-for _INT in ${ENABLED_INTEGRATIONS}
-do
-    INTEGRATIONS+=("-f")
-    INTEGRATIONS+=("${SCRIPTS_CI_DIR}/docker-compose/integration-${_INT}.yml")
-done
-
-readonly INTEGRATIONS
-
-if [[ -f ${BUILD_CACHE_DIR}/.skip_tests ]]; then
-    echo
-    echo "Skipping running tests !!!!!"
-    echo
-    exit
-fi
-
-function run_airflow_testing_in_docker() {
-    set +u
-    set +e
-    local exit_code
-    for try_num in {1..3}
+# Starts test types in parallel
+# test_types_to_run - list of test types (it's not an array, it is space-separate list)
+# ${@} - additional arguments to pass to test execution
+function run_test_types_in_parallel() {
+    start_end::group_start "Monitoring tests: ${test_types_to_run}"
+    parallel::monitor_progress
+    mkdir -p "${PARALLEL_MONITORED_DIR}/${SEMAPHORE_NAME}"
+    for TEST_TYPE in ${test_types_to_run}
     do
-        echo
-        echo "Starting try number ${try_num}"
-        echo
-        docker-compose --log-level INFO \
-          -f "${SCRIPTS_CI_DIR}/docker-compose/base.yml" \
-          -f "${SCRIPTS_CI_DIR}/docker-compose/backend-${BACKEND}.yml" \
-          "${INTEGRATIONS[@]}" \
-          "${DOCKER_COMPOSE_LOCAL[@]}" \
-             run airflow "${@}"
-        exit_code=$?
-        if [[ ${exit_code} == 254 ]]; then
-            echo
-            echo "Failed starting integration on ${try_num} try. Wiping-out docker-compose remnants"
-            echo
-            docker-compose --log-level INFO \
-                -f "${SCRIPTS_CI_DIR}/docker-compose/base.yml" \
-                down --remove-orphans -v --timeout 5
-            echo
-            echo "Sleeping 5 seconds"
-            echo
-            sleep 5
-            continue
-        else
-            break
-        fi
+        export TEST_TYPE
+        mkdir -p "${PARALLEL_MONITORED_DIR}/${SEMAPHORE_NAME}/${TEST_TYPE}"
+        mkdir -p "${PARALLEL_MONITORED_DIR}/${SEMAPHORE_NAME}/${TEST_TYPE}"
+        export JOB_LOG="${PARALLEL_MONITORED_DIR}/${SEMAPHORE_NAME}/${TEST_TYPE}/stdout"
+        export PARALLEL_JOB_STATUS="${PARALLEL_MONITORED_DIR}/${SEMAPHORE_NAME}/${TEST_TYPE}/status"
+        # Each test job will get SIGTERM followed by SIGTERM 200ms later and SIGKILL 200ms later after 25 mins
+        # shellcheck disable=SC2086
+        parallel --ungroup --bg --semaphore --semaphorename "${SEMAPHORE_NAME}" \
+            --jobs "${MAX_PARALLEL_TEST_JOBS}" --timeout 1500 \
+            "$( dirname "${BASH_SOURCE[0]}" )/ci_run_single_airflow_test_in_docker.sh" "${@}" >${JOB_LOG} 2>&1
     done
-    if [[ ${ONLY_RUN_QUARANTINED_TESTS:=} == "true" ]]; then
-        if [[ ${exit_code} == "1" ]]; then
-            echo
-            echo "Some Quarantined tests failed. but we recorded it in an issue"
-            echo
-            exit_code="0"
-        else
-            echo
-            echo "All Quarantined tests succeeded"
-            echo
+    parallel --semaphore --semaphorename "${SEMAPHORE_NAME}" --wait
+    parallel::kill_monitor
+    start_end::group_end
+}
+
+# Runs all test types in parallel depending on the number of CPUs available
+# We monitors their progress, display the progress  and summarize the result when finished.
+#
+# In case there is not enough memory (MEMORY_REQUIRED_FOR_INTEGRATION_TEST_PARALLEL_RUN) available for
+# the docker engine, the integration tests (which take a lot of memory for all the integrations)
+# are run sequentially after all other tests were run in parallel.
+#
+# Input:
+#   * TEST_TYPES  - contains all test types that should be executed
+#   * MEMORY_REQUIRED_FOR_INTEGRATION_TEST_PARALLEL_RUN - memory in bytes required to run integration tests
+#             in parallel to other tests
+#   * MEMORY_AVAILABLE_FOR_DOCKER - memory that is available in docker (set by cleanup_runners)
+#
+function run_all_test_types_in_parallel() {
+    parallel::cleanup_runner
+
+    start_end::group_start "Determine how to run the tests"
+    echo
+    echo "${COLOR_YELLOW}Running maximum ${MAX_PARALLEL_TEST_JOBS} test types in parallel${COLOR_RESET}"
+    echo
+
+    local run_integration_tests_separately="false"
+    # shellcheck disable=SC2153
+    local test_types_to_run=${TEST_TYPES}
+
+    if [[ ${test_types_to_run} == *"Integration"* ]]; then
+        if (( MEMORY_AVAILABLE_FOR_DOCKER < MEMORY_REQUIRED_FOR_INTEGRATION_TEST_PARALLEL_RUN )) ; then
+            # In case of Integration tests - they need more resources (Memory) thus we only run them in
+            # parallel if we have more than 32 GB memory available. Otherwise we run them sequentially
+            # after cleaning up the memory and stopping all docker instances
+            echo ""
+            echo "${COLOR_YELLOW}There is not enough memory to run Integration test in parallel${COLOR_RESET}"
+            echo "${COLOR_YELLOW}   Available memory: ${MEMORY_AVAILABLE_FOR_DOCKER}${COLOR_RESET}"
+            echo "${COLOR_YELLOW}   Required memory: ${MEMORY_REQUIRED_FOR_INTEGRATION_TEST_PARALLEL_RUN}${COLOR_RESET}"
+            echo ""
+            echo "${COLOR_YELLOW}Integration tests will be run separately at the end after cleaning up docker${COLOR_RESET}"
+            echo ""
+            # Remove Integration from list of tests to run in parallel
+            test_types_to_run="${test_types_to_run//Integration/}"
+            run_integration_tests_separately="true"
         fi
     fi
-    set -u
+    set +e
+    start_end::group_end
+
+    parallel::initialize_monitoring
+
+    run_test_types_in_parallel "${@}"
+    if [[ ${run_integration_tests_separately} == "true" ]]; then
+        parallel::cleanup_runner
+        test_types_to_run="Integration"
+        run_test_types_in_parallel "${@}"
+    fi
     set -e
-    return "${exit_code}"
+    # this will exit with error code in case some of the non-Quarantined tests failed
+    parallel::print_job_summary_and_return_status_code
 }
+
+
+testing::skip_tests_if_requested
 
 build_images::prepare_ci_build
 
-build_images::rebuild_ci_image_if_needed
+build_images::rebuild_ci_image_if_needed_with_group
 
-DOCKER_COMPOSE_LOCAL=()
+parallel::make_sure_gnu_parallel_is_installed
 
-if [[ ${MOUNT_LOCAL_SOURCES} == "true" ]]; then
-    DOCKER_COMPOSE_LOCAL+=("-f" "${SCRIPTS_CI_DIR}/docker-compose/local.yml")
-fi
+testing::get_maximum_parallel_test_jobs
 
-if [[ ${MOUNT_FILES} == "true" ]]; then
-    DOCKER_COMPOSE_LOCAL+=("-f" "${SCRIPTS_CI_DIR}/docker-compose/files.yml")
-fi
+testing::get_test_types_to_run
 
-if [[ ${GITHUB_ACTIONS} == "true" ]]; then
-    DOCKER_COMPOSE_LOCAL+=("-f" "${SCRIPTS_CI_DIR}/docker-compose/ga.yml")
-fi
+testing::get_docker_compose_local
 
-if [[ ${FORWARD_CREDENTIALS} == "true" ]]; then
-    DOCKER_COMPOSE_LOCAL+=("-f" "${SCRIPTS_CI_DIR}/docker-compose/forward-credentials.yml")
-fi
-
-if [[ -n ${INSTALL_AIRFLOW_VERSION=} || -n ${INSTALL_AIRFLOW_REFERENCE} ]]; then
-    DOCKER_COMPOSE_LOCAL+=("-f" "${SCRIPTS_CI_DIR}/docker-compose/remove-sources.yml")
-fi
-
-readonly DOCKER_COMPOSE_LOCAL
-
-echo
-echo "Using docker image: ${AIRFLOW_CI_IMAGE} for docker compose runs"
-echo
-
-RUN_INTEGRATION_TESTS=${RUN_INTEGRATION_TESTS:=""}
-readonly RUN_INTEGRATION_TESTS
-
-
-run_airflow_testing_in_docker "${@}"
+run_all_test_types_in_parallel "${@}"

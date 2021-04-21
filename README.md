@@ -16,21 +16,22 @@
  specific language governing permissions and limitations
  under the License.
 -->
+
 # Apache Airflow
 
 [![PyPI version](https://badge.fury.io/py/apache-airflow.svg)](https://badge.fury.io/py/apache-airflow)
 [![GitHub Build](https://github.com/apache/airflow/workflows/CI%20Build/badge.svg)](https://github.com/apache/airflow/actions)
 [![Coverage Status](https://img.shields.io/codecov/c/github/apache/airflow/master.svg)](https://codecov.io/github/apache/airflow?branch=master)
-[![Documentation Status](https://readthedocs.org/projects/airflow/badge/?version=latest)](https://airflow.readthedocs.io/en/latest/?badge=latest)
-[![License](http://img.shields.io/:license-Apache%202-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
+[![License](https://img.shields.io/:license-Apache%202-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0.txt)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/apache-airflow.svg)](https://pypi.org/project/apache-airflow/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/apache/airflow.svg)](https://hub.docker.com/r/apache/airflow)
 [![Docker Stars](https://img.shields.io/docker/stars/apache/airflow.svg)](https://hub.docker.com/r/apache/airflow)
-
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/apache-airflow)](https://pypi.org/project/apache-airflow/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Twitter Follow](https://img.shields.io/twitter/follow/ApacheAirflow.svg?style=social&label=Follow)](https://twitter.com/ApacheAirflow)
 [![Slack Status](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://s.apache.org/airflow-slack)
 
-[Apache Airflow](https://airflow.apache.org/docs/stable/) (or simply Airflow) is a platform to programmatically author, schedule, and monitor workflows.
+[Apache Airflow](https://airflow.apache.org/docs/apache-airflow/stable/) (or simply Airflow) is a platform to programmatically author, schedule, and monitor workflows.
 
 When workflows are defined as code, they become more maintainable, versionable, testable, and collaborative.
 
@@ -40,14 +41,15 @@ Use Airflow to author workflows as directed acyclic graphs (DAGs) of tasks. The 
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of contents**
 
+- [Project Focus](#project-focus)
+- [Principles](#principles)
 - [Requirements](#requirements)
+- [Support for Python versions](#support-for-python-versions)
 - [Getting started](#getting-started)
 - [Installing from PyPI](#installing-from-pypi)
 - [Official source code](#official-source-code)
-- [Project Focus](#project-focus)
-- [Principles](#principles)
+- [Convenience packages](#convenience-packages)
 - [User Interface](#user-interface)
-- [Backport packages](#backport-packages)
 - [Contributing](#contributing)
 - [Who uses Apache Airflow?](#who-uses-apache-airflow)
 - [Who Maintains Apache Airflow?](#who-maintains-apache-airflow)
@@ -57,94 +59,13 @@ Use Airflow to author workflows as directed acyclic graphs (DAGs) of tasks. The 
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Requirements
-
-Apache Airflow is tested with:
-
-|              | Master version (2.0.0dev) | Stable version (1.10.12) |
-| ------------ | ------------------------- | ------------------------ |
-| Python       | 3.6, 3.7, 3.8             | 2.7, 3.5, 3.6, 3.7, 3.8  |
-| PostgreSQL   | 9.6, 10                   | 9.6, 10                  |
-| MySQL        | 5.7                       | 5.6, 5.7                 |
-| SQLite       | latest stable             | latest stable            |
-| Kubernetes   | 1.16.2, 1.17.0            | 1.16.2, 1.17.0           |
-
-> Note: SQLite is used primarily for development purpose.
-
-### Additional notes on Python version requirements
-
-* Stable version [requires](https://github.com/apache/airflow/issues/8162) at least Python 3.5.3 when using Python 3
-
-## Getting started
-
-Visit the official Airflow website documentation (latest **stable** release) for help with [installing Airflow](https://airflow.apache.org/installation.html), [getting started](https://airflow.apache.org/start.html), or walking through a more complete [tutorial](https://airflow.apache.org/tutorial.html).
-
-> Note: If you're looking for documentation for master branch (latest development branch): you can find it on [ReadTheDocs](https://airflow.readthedocs.io/en/latest/).
-
-For more information on Airflow's Roadmap or Airflow Improvement Proposals (AIPs), visit the [Airflow Wiki](https://cwiki.apache.org/confluence/display/AIRFLOW/Airflow+Home).
-
-Official Docker (container) images for Apache Airflow are described in [IMAGES.rst](IMAGES.rst).
-
-## Installing from PyPI
-
-Airflow is published as `apache-airflow` package in PyPI. Installing it however might be sometimes tricky
-because Airflow is a bit of both a library and application. Libraries usually keep their dependencies open and
-applications usually pin them, but we should do neither and both at the same time. We decided to keep
-our dependencies as open as possible (in `setup.py`) so users can install different versions of libraries
-if needed. This means that from time to time plain `pip install apache-airflow` will not work or will
-produce unusable Airflow installation.
-
-In order to have repeatable installation, however, introduced in **Airflow 1.10.10** and updated in
-**Airflow 1.10.12** we also keep a set of "known-to-be-working" constraint files in the
-orphan `constraints-master` and `constraints-1-10` branches. We keep those "known-to-be-working"
-constraints files separately per major/minor python version.
-You can use them as constraint files when installing Airflow from PyPI. Note that you have to specify
-correct Airflow tag/version/branch and python versions in the URL.
-
-1. Installing just airflow:
-
-```bash
-pip install apache-airflow==1.10.12 \
- --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-1.10.12/constraints-3.7.txt"
-```
-
-2. Installing with extras (for example postgres,google)
-```bash
-pip install apache-airflow[postgres,google]==1.10.12 \
- --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-1.10.12/constraints-3.7.txt"
-```
-
-## Official source code
-
-Apache Airflow is an [Apache Software Foundation](http://www.apache.org) (ASF) project, and our official source code releases:
-
-- Follow the [ASF Release Policy](http://www.apache.org/legal/release-policy.html)
-- Can be downloaded from [the ASF Distribution Directory](https://downloads.apache.org)
-- Are cryptographically signed by the release manager
-- Are officially voted on by the PMC members during the [Release Approval Process](http://www.apache.org/legal/release-policy.html#release-approval)
-
-Following the ASF rules, the source packages released must be sufficient for a user to build and test the release provided they have access to the appropriate platform and tools.
-
-Other ways of retrieving source code are "convenience" methods. For example:
-
-- Tagging in GitHub to mark the git project sources that were used to generate official source packages
-
-We also have binary "convenience" packages:
-
-- PyPI releases to install Airflow using standard python tools
-- Docker Images published in the [Apache Airflow DockerHub](https://hub.docker.com/repository/docker/apache/airflow).
-
-These artifacts are not official releases, but they are built using officially released sources.
-
-> Note: Airflow Summit 2020's ["Production Docker Image talk"](https://youtu.be/wDr3Y7q2XoI) explains context, architecture and customization/extension methods.
-
 ## Project Focus
 
-Airflow works best with workflows that are mostly static and slowly changing. When the structure is similar from one run to the next, it allows for clarity around unit of work and continuity. Other similar projects include [Luigi](https://github.com/spotify/luigi), [Oozie](http://oozie.apache.org/) and [Azkaban](https://azkaban.github.io/).
+Airflow works best with workflows that are mostly static and slowly changing. When DAG structure is similar from one run to the next, it allows for clarity around unit of work and continuity. Other similar projects include [Luigi](https://github.com/spotify/luigi), [Oozie](https://oozie.apache.org/) and [Azkaban](https://azkaban.github.io/).
 
-Airflow is commonly used to process data, but has the opinion that tasks should ideally be idempotent, and should not pass large quantities of data from one task to the next (though tasks can pass metadata using Airflow's [Xcom feature](https://airflow.apache.org/docs/stable/concepts.html#xcoms)). For high-volume, data-intensive tasks, a best practice is to delegate to external services that specialize on that type of work.
+Airflow is commonly used to process data, but has the opinion that tasks should ideally be idempotent (i.e. results of the task will be the same, and will not create duplicated data in a destination system), and should not pass large quantities of data from one task to the next (though tasks can pass metadata using Airflow's [Xcom feature](https://airflow.apache.org/docs/apache-airflow/stable/concepts.html#xcoms)). For high-volume, data-intensive tasks, a best practice is to delegate to external services that specialize on that type of work.
 
-Airflow **is not** a streaming solution. Airflow is not in the [Spark Streaming](http://spark.apache.org/streaming/) or [Storm](https://storm.apache.org/) space.
+Airflow is not a streaming solution, but it is often used to process real-time data, pulling data off streams in batches.
 
 ## Principles
 
@@ -153,113 +74,175 @@ Airflow **is not** a streaming solution. Airflow is not in the [Spark Streaming]
 - **Elegant**:  Airflow pipelines are lean and explicit. Parameterizing your scripts is built into the core of Airflow using the powerful **Jinja** templating engine.
 - **Scalable**:  Airflow has a modular architecture and uses a message queue to orchestrate an arbitrary number of workers.
 
+## Requirements
+
+Apache Airflow is tested with:
+
+|              | Master version (dev)      | Stable version (2.0.2)   | Previous version (1.10.15) |
+| ------------ | ------------------------- | ------------------------ | -------------------------  |
+| Python       | 3.6, 3.7, 3.8             | 3.6, 3.7, 3.8            | 2.7, 3.5, 3.6, 3.7, 3.8    |
+| PostgreSQL   | 9.6, 10, 11, 12, 13       | 9.6, 10, 11, 12, 13      | 9.6, 10, 11, 12, 13        |
+| MySQL        | 5.7, 8                    | 5.7, 8                   | 5.6, 5.7                   |
+| SQLite       | 3.15.0+                   | 3.15.0+                  | 3.15.0+                    |
+| Kubernetes   | 1.20, 1.19, 1.18          | 1.20, 1.19, 1.18         | 1.18, 1.17, 1.16           |
+
+**Note:** MySQL 5.x versions are unable to or have limitations with
+running multiple schedulers -- please see the [Scheduler docs](https://airflow.apache.org/docs/apache-airflow/stable/scheduler.html).
+MariaDB is not tested/recommended.
+
+**Note:** SQLite is used in Airflow tests. Do not use it in production. We recommend
+using the latest stable version of SQLite for local development.
+
+## Support for Python versions
+
+As of Airflow 2.0 we agreed to certain rules we follow for Python support. They are based on the official
+release schedule of Python, nicely summarized in the
+[Python Developer's Guide](https://devguide.python.org/#status-of-python-branches)
+
+1. We finish support for Python versions when they reach EOL (For Python 3.6 it means that we will remove it
+   from being supported on 23.12.2021).
+
+2. The "oldest" supported version of Python is the default one. "Default" is only meaningful in terms of
+   "smoke tests" in CI PRs which are run using this default version.
+
+3. We support a new version of Python after it is officially released, as soon as we manage to make
+   it works in our CI pipeline (which might not be immediate) and release a new version of Airflow
+   (non-Patch version) based on this CI set-up.
+
+### Additional notes on Python version requirements
+
+* Previous version [requires](https://github.com/apache/airflow/issues/8162) at least Python 3.5.3
+  when using Python 3
+
+## Getting started
+
+Visit the official Airflow website documentation (latest **stable** release) for help with
+[installing Airflow](https://airflow.apache.org/docs/apache-airflow/stable/installation.html),
+[getting started](https://airflow.apache.org/docs/apache-airflow/stable/start/index.html), or walking
+through a more complete [tutorial](https://airflow.apache.org/docs/apache-airflow/stable/tutorial.html).
+
+> Note: If you're looking for documentation for master branch (latest development branch): you can find it on [s.apache.org/airflow-docs](https://s.apache.org/airflow-docs/).
+
+For more information on Airflow Improvement Proposals (AIPs), visit
+the [Airflow Wiki](https://cwiki.apache.org/confluence/display/AIRFLOW/Airflow+Improvements+Proposals).
+
+Official Docker (container) images for Apache Airflow are described in [IMAGES.rst](IMAGES.rst).
+
+## Installing from PyPI
+
+We publish Apache Airflow as `apache-airflow` package in PyPI. Installing it however might be sometimes tricky
+because Airflow is a bit of both a library and application. Libraries usually keep their dependencies open and
+applications usually pin them, but we should do neither and both at the same time. We decided to keep
+our dependencies as open as possible (in `setup.py`) so users can install different versions of libraries
+if needed. This means that from time to time plain `pip install apache-airflow` will not work or will
+produce unusable Airflow installation.
+
+In order to have repeatable installation, however, introduced in **Airflow 1.10.10** and updated in
+**Airflow 1.10.12** we also keep a set of "known-to-be-working" constraint files in the
+orphan `constraints-master`, `constraints-2-0` and `constraints-1-10` branches. We keep those "known-to-be-working"
+constraints files separately per major/minor Python version.
+You can use them as constraint files when installing Airflow from PyPI. Note that you have to specify
+correct Airflow tag/version/branch and Python versions in the URL.
+
+
+1. Installing just Airflow:
+
+NOTE!!!
+
+On November 2020, new version of PIP (20.3) has been released with a new, 2020 resolver. This resolver
+might work with Apache Airflow as of 20.3.3, but it might lead to errors in installation. It might
+depend on your choice of extras. In order to install Airflow reliably, you might need to either downgrade
+pip to version 20.2.4 `pip install --upgrade pip==20.2.4` or, in case you use Pip 20.3,
+you might need to add option] `--use-deprecated legacy-resolver` to your pip install command.
+While `pip 20.3.3` solved most of the `teething` problems of 20.3, this note will remain here until we
+set `pip 20.3` as official version in our CI pipeline where we are testing the installation as well.
+Due to those constraints, only `pip` installation is currently officially supported.
+
+While they are some successes with using other tools like [poetry](https://python-poetry.org) or
+[pip-tools](https://pypi.org/project/pip-tools), they do not share the same workflow as
+`pip` - especially when it comes to constraint vs. requirements management.
+Installing via `Poetry` or `pip-tools` is not currently supported.
+
+If you wish to install airflow using those tools you should use the constraint files and convert
+them to appropriate format and workflow that your tool requires.
+
+
+```bash
+pip install apache-airflow==2.0.2 \
+ --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.0.2/constraints-3.7.txt"
+```
+
+2. Installing with extras (for example postgres,google)
+
+```bash
+pip install apache-airflow[postgres,google]==2.0.2 \
+ --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.0.2/constraints-3.7.txt"
+```
+
+For information on installing provider packages check
+[providers](http://airflow.apache.org/docs/apache-airflow-providers/index.html).
+
+## Official source code
+
+Apache Airflow is an [Apache Software Foundation](https://www.apache.org) (ASF) project,
+and our official source code releases:
+
+- Follow the [ASF Release Policy](https://www.apache.org/legal/release-policy.html)
+- Can be downloaded from [the ASF Distribution Directory](https://downloads.apache.org/airflow)
+- Are cryptographically signed by the release manager
+- Are officially voted on by the PMC members during the
+  [Release Approval Process](https://www.apache.org/legal/release-policy.html#release-approval)
+
+Following the ASF rules, the source packages released must be sufficient for a user to build and test the
+release provided they have access to the appropriate platform and tools.
+
+## Convenience packages
+
+There are other ways of installing and using Airflow. Those are "convenience" methods - they are
+not "official releases" as stated by the `ASF Release Policy`, but they can be used by the users
+who do not want to build the software themselves.
+
+Those are - in the order of most common ways people install Airflow:
+
+- [PyPI releases](https://pypi.org/project/apache-airflow/) to install Airflow using standard `pip` tool
+- [Docker Images](https://hub.docker.com/r/apache/airflow) to install airflow via
+  `docker` tool, use them in Kubernetes, Helm Charts, `docker-compose`, `docker swarm` etc. You can
+  read more about using, customising, and extending the images in the
+  [Latest docs](https://airflow.apache.org/docs/apache-airflow/stable/production-deployment.html), and
+  learn details on the internals in the [IMAGES.rst](IMAGES.rst) document.
+- [Tags in GitHub](https://github.com/apache/airflow/tags) to retrieve the git project sources that
+  were used to generate official source packages via git
+
+All those artifacts are not official releases, but they are prepared using officially released sources.
+Some of those artifacts are "development" or "pre-release" ones, and they are clearly marked as such
+following the ASF Policy.
+
 ## User Interface
 
 - **DAGs**: Overview of all DAGs in your environment.
 
-  ![](/docs/img/dags.png)
+  ![DAGs](/docs/apache-airflow/img/dags.png)
 
 - **Tree View**: Tree representation of a DAG that spans across time.
 
-  ![](/docs/img/tree.png)
+  ![Tree View](/docs/apache-airflow/img/tree.png)
 
 - **Graph View**: Visualization of a DAG's dependencies and their current status for a specific run.
 
-  ![](/docs/img/graph.png)
+  ![Graph View](/docs/apache-airflow/img/graph.png)
 
 - **Task Duration**: Total time spent on different tasks over time.
 
-  ![](/docs/img/duration.png)
+  ![Task Duration](/docs/apache-airflow/img/duration.png)
 
 - **Gantt View**: Duration and overlap of a DAG.
 
-  ![](/docs/img/gantt.png)
+  ![Gantt View](/docs/apache-airflow/img/gantt.png)
 
 - **Code View**:  Quick way to view source code of a DAG.
 
-  ![](/docs/img/code.png)
+  ![Code View](/docs/apache-airflow/img/code.png)
 
-
-## Backport packages
-
-### Context: Airflow 2.0 operators, hooks, and secrets
-
-Currently, stable Apache Airflow versions are from the 1.10.* series.
-We are working on the future, major version of Airflow from the 2.0.* series.
-It is going to be released in 2020. However, the exact time of release depends on many factors and is
-not yet confirmed.
-
-We have already a lot of changes in the operators, transfers, hooks, sensors, secrets for many external
-systems, but they are not used nor tested widely because they are part of the master/2.0 release.
-
-In the Airflow 2.0 - following AIP-21 "change in import paths" all the non-core interfaces to external
-systems of Apache Airflow have been moved to the "airflow.providers" package.
-
-Thanks to that and automated backport effort we took, the operators from Airflow 2.0
-can be used in Airflow 1.10 as separately installable packages, with the constraint that
-those packages can only be used in python3.6+ environment.
-
-### Installing Airflow 2.0 operators in Airflow 1.10
-
-We released backport packages that can be installed for older Airflow versions.
-Those backport packages are going to be released more frequently that main Airflow 1.10.* releases.
-
-You will not have to upgrade your Airflow version to use those packages. You can find those packages in the
-[PyPI](https://pypi.org/search/?q=apache-airflow-backport-providers&o=) and install them separately for each
-provider.
-
-Those packages are available now and can be used in the latest Airflow 1.10.* version. Most of those
-packages are also installable and usable in most Airflow 1.10.* releases but there is no extensive testing
-done beyond the latest released version, so you might expect more problems in earlier Airflow versions.
-
-### An easier migration path to 2.0
-
-With backported providers package users can migrate their DAGs to the new providers package incrementally
-and once they convert to the new operators/sensors/hooks they can seamlessly migrate their
-environments to Airflow 2.0. The nice thing about providers backport packages is that you can use
-both old and new classes at the same time - even in the same DAG. So your migration can be gradual and smooth.
-Note that in Airflow 2.0 old classes raise deprecation warning and redirect to the new classes wherever
-it is possible. In some rare cases the new operators will not be fully backwards compatible - you will find
-information about those cases in [UPDATING.md](UPDATING.md) where we explained all such cases. Switching
-early to the Airflow 2.0 operators while still running Airflow 1.10 will make your migration much easier.
-
-More information about the status and releases of the back-ported packages are available
-at [Backported providers package page](https://cwiki.apache.org/confluence/display/AIRFLOW/Backported+providers+packages+for+Airflow+1.10.*+series)
-
-
-### Installing backport packages
-
-Note that the backport packages might require extra dependencies. Pip installs the required dependencies
-automatically when it installs the backport package, but there are sometimes cross-dependencies between the
-backport packages. For example `google` package has cross-dependency with `amazon` package to allow
-transfers between those two cloud providers. You might need to install those packages in case you use
-cross-dependent packages. The easiest way to install them is to use "extras" when installing the package,
-for example the below will install both `google` and `amazon` backport packages:
-
-```bash
-pip install apache-airflow-backport-providers-google[amazon]
-```
-
-This is all documented in the PyPI description of the packages
-as well as in the README.md file available for each provider package. For example for google package
-you can find the readme in [README.md](airflow/providers/google/README.md). You will also find there
-the summary of both - new classes and moved classes as well as requirement information.
-
-### Troubleshooting installing backport packages
-
-Backport providers only work when they are installed in the same namespace as the 'apache-airflow' 1.10
-package. This is majority of cases when you simply run `pip install` - it installs all packages
-in the same folder (usually in `/usr/local/lib/pythonX.Y/site-packages`). But when you install
-the `apache-airflow` and `apache-airflow-backport-package-*` using different methods (for example using
-`pip install -e .` or `pip install --user` they might be installed in different namespaces.
-If that's the case, the provider packages will not be importable (the error in such case is
-`ModuleNotFoundError: No module named 'airflow.providers'`).
-
-If you experience the problem, you can easily fix it by creating symbolic link
-in your installed "airflow" folder to the  "providers" folder where you installed your backport packages.
-If you installed it with `-e`, this link should be created in your airflow
-sources,  if you installed it with the `--user` flag it should be from the
-`~/.local/lib/pythonX.Y/site-packages/airflow/` folder,
 
 ## Contributing
 
@@ -267,7 +250,8 @@ Want to help build Apache Airflow? Check out our [contributing documentation](ht
 
 ## Who uses Apache Airflow?
 
-More than 350 organizations are using Apache Airflow [in the wild](https://github.com/apache/airflow/blob/master/INTHEWILD.md).
+More than 400 organizations are using Apache Airflow
+[in the wild](https://github.com/apache/airflow/blob/master/INTHEWILD.md).
 
 ## Who Maintains Apache Airflow?
 
@@ -275,11 +259,11 @@ Airflow is the work of the [community](https://github.com/apache/airflow/graphs/
 but the [core committers/maintainers](https://people.apache.org/committers-by-project.html#airflow)
 are responsible for reviewing and merging PRs as well as steering conversation around new feature requests.
 If you would like to become a maintainer, please review the Apache Airflow
-[committer requirements](https://cwiki.apache.org/confluence/display/AIRFLOW/Committers).
+[committer requirements](https://github.com/apache/airflow/blob/master/COMMITTERS.rst#guidelines-to-become-an-airflow-committer).
 
 ## Can I use the Apache Airflow logo in my presentation?
 
-Yes! Be sure to abide by the Apache Foundation [trademark policies](https://www.apache.org/foundation/marks/#books) and the Apache Airflow [Brandbook](https://cwiki.apache.org/confluence/display/AIRFLOW/Brandbook). The most up to date logos are found in [this repo](/docs/img/logos) and on the Apache Software Foundation [website](https://www.apache.org/logos/about.html).
+Yes! Be sure to abide by the Apache Foundation [trademark policies](https://www.apache.org/foundation/marks/#books) and the Apache Airflow [Brandbook](https://cwiki.apache.org/confluence/display/AIRFLOW/Brandbook). The most up to date logos are found in [this repo](/docs/apache-airflow/img/logos) and on the Apache Software Foundation [website](https://www.apache.org/logos/about.html).
 
 ## Airflow merchandise
 
@@ -288,6 +272,5 @@ If you would love to have Apache Airflow stickers, t-shirt etc. then check out
 
 ## Links
 
-- [Documentation](https://airflow.apache.org/docs/stable/)
+- [Documentation](https://airflow.apache.org/docs/apache-airflow/stable/)
 - [Chat](https://s.apache.org/airflow-slack)
-- [More](https://cwiki.apache.org/confluence/display/AIRFLOW/Airflow+Links)

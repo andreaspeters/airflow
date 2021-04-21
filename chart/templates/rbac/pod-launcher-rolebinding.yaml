@@ -19,11 +19,18 @@
 ## Airflow Pod Launcher Role Binding
 #################################
 {{- if and .Values.rbacEnabled .Values.allowPodLaunching }}
-{{- $grantScheduler := or (eq .Values.executor "LocalExecutor") (eq .Values.executor "SequentialExecutor") (eq .Values.executor "KubernetesExecutor") }}
-{{- $grantWorker := or (eq .Values.executor "CeleryExecutor") (eq .Values.executor "KubernetesExecutor") }}
+{{- $schedulerLaunchExecutors := list "LocalExecutor" "KubernetesExecutor" "CeleryKubernetesExecutor" }}
+{{- $workerLaunchExecutors := list "CeleryExecutor" "KubernetesExecutor" "CeleryKubernetesExecutor" }}
+{{- if .Values.multiNamespaceMode }}
 kind: ClusterRoleBinding
+{{- else }}
+kind: RoleBinding
+{{- end }}
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+{{- if not .Values.multiNamespaceMode }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   name: {{ .Release.Name }}-pod-launcher-rolebinding
   labels:
     tier: airflow
@@ -35,15 +42,19 @@ metadata:
 {{- end }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
+{{- if .Values.multiNamespaceMode }}
   kind: ClusterRole
+{{- else }}
+  kind: Role
+{{- end }}
   name: {{ .Release.Name }}-pod-launcher-role
 subjects:
-{{- if $grantScheduler }}
+{{- if has .Values.executor $schedulerLaunchExecutors }}
   - kind: ServiceAccount
     name: {{ .Release.Name }}-scheduler
     namespace: {{ .Release.Namespace }}
 {{- end }}
-{{- if $grantWorker }}
+{{- if has .Values.executor $workerLaunchExecutors }}
   - kind: ServiceAccount
     name: {{ .Release.Name }}-worker
     namespace: {{ .Release.Namespace }}

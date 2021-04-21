@@ -19,7 +19,11 @@ import re
 from typing import Optional
 
 import google
-from cached_property import cached_property
+
+try:
+    from functools import cached_property
+except ImportError:
+    from cached_property import cached_property
 from google.api_core.exceptions import NotFound, PermissionDenied
 from google.api_core.gapic_v1.client_info import ClientInfo
 from google.cloud.secretmanager_v1 import SecretManagerServiceClient
@@ -44,7 +48,7 @@ class _SecretManagerClient(LoggingMixin):
     def __init__(
         self,
         credentials: google.auth.credentials.Credentials,
-    ):
+    ) -> None:
         super().__init__()
         self.credentials = credentials
 
@@ -60,9 +64,7 @@ class _SecretManagerClient(LoggingMixin):
 
     @cached_property
     def client(self) -> SecretManagerServiceClient:
-        """
-        Create an authenticated KMS client
-        """
+        """Create an authenticated KMS client"""
         _client = SecretManagerServiceClient(
             credentials=self.credentials, client_info=ClientInfo(client_library_version='airflow_v' + version)
         )

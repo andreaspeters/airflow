@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google BigQuery to MySQL operator.
-"""
+"""This module contains Google BigQuery to MySQL operator."""
 from typing import Optional, Sequence, Union
 
 from airflow.models import BaseOperator
@@ -52,9 +50,6 @@ class BigQueryToMySqlOperator(BaseOperator):
 
     :param dataset_table: A dotted ``<dataset>.<table>``: the big query table of origin
     :type dataset_table: str
-    :param max_results: The maximum number of records (rows) to be fetched
-        from the table. (templated)
-    :type max_results: str
     :param selected_fields: List of fields to return (comma-separated). If
         unspecified, all fields are returned.
     :type selected_fields: str
@@ -63,7 +58,6 @@ class BigQueryToMySqlOperator(BaseOperator):
     :param delegate_to: The account to impersonate using domain-wide delegation of authority,
         if any. For this to work, the service account making the request must have
         domain-wide delegation enabled.
-    :type delegate_to: str
     :type delegate_to: str
     :param mysql_conn_id: reference to a specific mysql hook
     :type mysql_conn_id: str
@@ -124,7 +118,7 @@ class BigQueryToMySqlOperator(BaseOperator):
         try:
             self.dataset_id, self.table_id = dataset_table.split('.')
         except ValueError:
-            raise ValueError('Could not parse {} as <dataset>.<table>'.format(dataset_table))
+            raise ValueError(f'Could not parse {dataset_table} as <dataset>.<table>')
 
     def _bq_get_data(self):
         self.log.info('Fetching Data from:')

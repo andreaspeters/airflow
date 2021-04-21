@@ -20,7 +20,7 @@ from typing import Any, Optional
 
 from airflow.configuration import conf
 from airflow.exceptions import AirflowException
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 
 try:
     from snakebite.client import AutoConfigClient, Client, HAClient, Namenode  # pylint: disable=syntax-error
@@ -46,6 +46,11 @@ class HDFSHook(BaseHook):
     :type autoconfig: bool
     """
 
+    conn_name_attr = 'hdfs_conn_id'
+    default_conn_name = 'hdfs_default'
+    conn_type = 'hdfs'
+    hook_name = 'HDFS'
+
     def __init__(
         self, hdfs_conn_id: str = 'hdfs_default', proxy_user: Optional[str] = None, autoconfig: bool = False
     ):
@@ -54,17 +59,14 @@ class HDFSHook(BaseHook):
             raise ImportError(
                 'This HDFSHook implementation requires snakebite, but '
                 'snakebite is not compatible with Python 3 '
-                '(as of August 2015). Please use Python 2 if you require '
-                'this hook  -- or help by submitting a PR!'
+                '(as of August 2015). Please help by submitting a PR!'
             )
         self.hdfs_conn_id = hdfs_conn_id
         self.proxy_user = proxy_user
         self.autoconfig = autoconfig
 
     def get_conn(self) -> Any:
-        """
-        Returns a snakebite HDFSClient object.
-        """
+        """Returns a snakebite HDFSClient object."""
         # When using HAClient, proxy_user must be the same, so is ok to always
         # take the first.
         effective_user = self.proxy_user
@@ -103,8 +105,6 @@ class HDFSHook(BaseHook):
                 hdfs_namenode_principal=hdfs_namenode_principal,
             )
         else:
-            raise HDFSHookException(
-                "conn_id doesn't exist in the repository " "and autoconfig is not specified"
-            )
+            raise HDFSHookException("conn_id doesn't exist in the repository and autoconfig is not specified")
 
         return client

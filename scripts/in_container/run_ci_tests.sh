@@ -35,8 +35,8 @@ fi
 
 MAIN_GITHUB_REPOSITORY="apache/airflow"
 
-if [[ ${ONLY_RUN_QUARANTINED_TESTS:=} = "true" ]]; then
-    if [[ ${GITHUB_REPOSITORY} == "${MAIN_GITHUB_REPOSITORY}" ]]; then
+if [[ ${TEST_TYPE:=} == "Quarantined" ]]; then
+    if [[ ${GITHUB_REPOSITORY=} == "${MAIN_GITHUB_REPOSITORY}" ]]; then
         if [[ ${RES} == "1" || ${RES} == "0" ]]; then
             echo
             echo "Pytest exited with ${RES} result. Updating Quarantine Issue!"
@@ -47,19 +47,16 @@ if [[ ${ONLY_RUN_QUARANTINED_TESTS:=} = "true" ]]; then
             echo "Pytest exited with ${RES} result. NOT Updating Quarantine Issue!"
             echo
         fi
-    else
-        echo
-        echo "GitHub repository '${GITHUB_REPOSITORY}'. NOT Updating Quarantine Issue!"
-        echo
     fi
-else
-    echo
-    echo "Regular tests. NOT Updating Quarantine Issue!"
-    echo
 fi
 
 if [[ ${CI:=} == "true" ]]; then
-    dump_airflow_logs
+    if [[ ${RES} != "0" ]]; then
+        echo
+        echo "Dumping logs on error"
+        echo
+        dump_airflow_logs
+    fi
 fi
 
 exit "${RES}"

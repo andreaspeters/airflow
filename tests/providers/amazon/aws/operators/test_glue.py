@@ -16,8 +16,7 @@
 # under the License.
 
 import unittest
-
-import mock
+from unittest import mock
 
 from airflow import configuration
 from airflow.providers.amazon.aws.hooks.glue import AwsGlueJobHook
@@ -54,4 +53,4 @@ class TestAwsGlueJobOperator(unittest.TestCase):
         self.glue.execute(None)
 
         mock_initialize_job.assert_called_once_with({})
-        self.assertEqual(self.glue.job_name, 'my_test_job')
+        assert self.glue.job_name == 'my_test_job'

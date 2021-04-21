@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains a Google Cloud Storage to Google Drive transfer operator.
-"""
+"""This module contains a Google Cloud Storage to Google Drive transfer operator."""
 import tempfile
 from typing import Optional, Sequence, Union
 
@@ -32,7 +30,7 @@ WILDCARD = "*"
 
 class GCSToGoogleDriveOperator(BaseOperator):
     """
-    Copies objects from a Google Cloud Storage service service to Google Drive service, with renaming
+    Copies objects from a Google Cloud Storage service to a Google Drive service, with renaming
     if requested.
 
     Using this operator requires the following OAuth 2.0 scope:
@@ -103,7 +101,7 @@ class GCSToGoogleDriveOperator(BaseOperator):
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
 
         self.source_bucket = source_bucket
@@ -119,7 +117,7 @@ class GCSToGoogleDriveOperator(BaseOperator):
     def execute(self, context):
 
         self.gcs_hook = GCSHook(
-            google_cloud_storage_conn_id=self.gcp_conn_id,
+            gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
             impersonation_chain=self.impersonation_chain,
         )

@@ -15,17 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains a Dataproc Job sensor.
-"""
+"""This module contains a Dataproc Job sensor."""
 # pylint: disable=C0302
 
 from google.cloud.dataproc_v1beta2.types import JobStatus
 
-from airflow.providers.google.cloud.hooks.dataproc import DataprocHook
-from airflow.sensors.base_sensor_operator import BaseSensorOperator
-from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
+from airflow.providers.google.cloud.hooks.dataproc import DataprocHook
+from airflow.sensors.base import BaseSensorOperator
+from airflow.utils.decorators import apply_defaults
 
 
 class DataprocJobSensor(BaseSensorOperator):
@@ -62,19 +60,23 @@ class DataprocJobSensor(BaseSensorOperator):
         self.dataproc_job_id = dataproc_job_id
         self.location = location
 
-    def poke(self, context):
+    def poke(self, context: dict) -> bool:
         hook = DataprocHook(gcp_conn_id=self.gcp_conn_id)
         job = hook.get_job(job_id=self.dataproc_job_id, location=self.location, project_id=self.project_id)
         state = job.status.state
 
-        if state == JobStatus.ERROR:
-            raise AirflowException('Job failed:\n{}'.format(job))
-        elif state in {JobStatus.CANCELLED, JobStatus.CANCEL_PENDING, JobStatus.CANCEL_STARTED}:
-            raise AirflowException('Job was cancelled:\n{}'.format(job))
-        elif JobStatus.DONE == state:
+        if state == JobStatus.State.ERROR:
+            raise AirflowException(f'Job failed:\n{job}')
+        elif state in {
+            JobStatus.State.CANCELLED,
+            JobStatus.State.CANCEL_PENDING,
+            JobStatus.State.CANCEL_STARTED,
+        }:
+            raise AirflowException(f'Job was cancelled:\n{job}')
+        elif JobStatus.State.DONE == state:
             self.log.debug("Job %s completed successfully.", self.dataproc_job_id)
             return True
-        elif JobStatus.ATTEMPT_FAILURE == state:
+        elif JobStatus.State.ATTEMPT_FAILURE == state:
             self.log.debug("Job %s attempt has failed.", self.dataproc_job_id)
 
         self.log.info("Waiting for job %s to complete.", self.dataproc_job_id)

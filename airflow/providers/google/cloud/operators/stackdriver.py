@@ -19,6 +19,7 @@
 from typing import Optional, Sequence, Union
 
 from google.api_core.gapic_v1.method import DEFAULT
+from google.cloud.monitoring_v3 import AlertPolicy, NotificationChannel
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.stackdriver import StackdriverHook
@@ -103,12 +104,12 @@ class StackdriverListAlertPoliciesOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.format_ = format_
         self.filter_ = filter_
@@ -125,7 +126,7 @@ class StackdriverListAlertPoliciesOperator(BaseOperator):
 
     def execute(self, context):
         self.log.info(
-            'List Alert Policies: Project id: %s Format: %s Filter: %s Order By: %s Page Size: %d',
+            'List Alert Policies: Project id: %s Format: %s Filter: %s Order By: %s Page Size: %s',
             self.project_id,
             self.format_,
             self.filter_,
@@ -139,7 +140,7 @@ class StackdriverListAlertPoliciesOperator(BaseOperator):
                 impersonation_chain=self.impersonation_chain,
             )
 
-        return self.hook.list_alert_policies(
+        result = self.hook.list_alert_policies(
             project_id=self.project_id,
             format_=self.format_,
             filter_=self.filter_,
@@ -149,6 +150,7 @@ class StackdriverListAlertPoliciesOperator(BaseOperator):
             timeout=self.timeout,
             metadata=self.metadata,
         )
+        return [AlertPolicy.to_dict(policy) for policy in result]
 
 
 class StackdriverEnableAlertPoliciesOperator(BaseOperator):
@@ -207,12 +209,12 @@ class StackdriverEnableAlertPoliciesOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.gcp_conn_id = gcp_conn_id
         self.project_id = project_id
@@ -298,12 +300,12 @@ class StackdriverDisableAlertPoliciesOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.gcp_conn_id = gcp_conn_id
         self.project_id = project_id
@@ -391,12 +393,12 @@ class StackdriverUpsertAlertOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.alerts = alerts
         self.retry = retry
@@ -480,12 +482,12 @@ class StackdriverDeleteAlertOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.name = name
         self.retry = retry
@@ -592,12 +594,12 @@ class StackdriverListNotificationChannelsOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.format_ = format_
         self.filter_ = filter_
@@ -614,7 +616,7 @@ class StackdriverListNotificationChannelsOperator(BaseOperator):
 
     def execute(self, context):
         self.log.info(
-            'List Notification Channels: Project id: %s Format: %s Filter: %s Order By: %s Page Size: %d',
+            'List Notification Channels: Project id: %s Format: %s Filter: %s Order By: %s Page Size: %s',
             self.project_id,
             self.format_,
             self.filter_,
@@ -627,7 +629,7 @@ class StackdriverListNotificationChannelsOperator(BaseOperator):
                 delegate_to=self.delegate_to,
                 impersonation_chain=self.impersonation_chain,
             )
-        return self.hook.list_notification_channels(
+        channels = self.hook.list_notification_channels(
             format_=self.format_,
             project_id=self.project_id,
             filter_=self.filter_,
@@ -637,6 +639,8 @@ class StackdriverListNotificationChannelsOperator(BaseOperator):
             timeout=self.timeout,
             metadata=self.metadata,
         )
+        result = [NotificationChannel.to_dict(channel) for channel in channels]
+        return result
 
 
 class StackdriverEnableNotificationChannelsOperator(BaseOperator):
@@ -696,12 +700,12 @@ class StackdriverEnableNotificationChannelsOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.filter_ = filter_
         self.retry = retry
@@ -789,12 +793,12 @@ class StackdriverDisableNotificationChannelsOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.filter_ = filter_
         self.retry = retry
@@ -884,12 +888,12 @@ class StackdriverUpsertNotificationChannelOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[str] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.channels = channels
         self.retry = retry
@@ -975,12 +979,12 @@ class StackdriverDeleteNotificationChannelOperator(BaseOperator):
         retry: Optional[str] = DEFAULT,
         timeout: Optional[float] = DEFAULT,
         metadata: Optional[str] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         project_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.name = name
         self.retry = retry

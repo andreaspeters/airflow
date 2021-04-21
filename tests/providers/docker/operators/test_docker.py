@@ -17,8 +17,9 @@
 # under the License.
 import logging
 import unittest
+from unittest import mock
 
-import mock
+import pytest
 
 from airflow.exceptions import AirflowException
 
@@ -66,6 +67,7 @@ class TestDockerOperator(unittest.TestCase):
             owner='unittest',
             task_id='unittest',
             volumes=['/host/path:/container/path'],
+            entrypoint='["sh", "-c"]',
             working_dir='/container/path',
             shm_size=1000,
             host_tmp_dir='/host/airflow',
@@ -85,6 +87,7 @@ class TestDockerOperator(unittest.TestCase):
             host_config=self.client_mock.create_host_config.return_value,
             image='ubuntu:latest',
             user=None,
+            entrypoint=['sh', '-c'],
             working_dir='/container/path',
             tty=True,
         )
@@ -99,6 +102,7 @@ class TestDockerOperator(unittest.TestCase):
             dns_search=None,
             cap_add=None,
             extra_hosts=None,
+            privileged=False,
         )
         self.tempdir_mock.assert_called_once_with(dir='/host/airflow', prefix='airflowtmp')
         self.client_mock.images.assert_called_once_with(name='ubuntu:latest')
@@ -107,19 +111,17 @@ class TestDockerOperator(unittest.TestCase):
         )
         self.client_mock.pull.assert_called_once_with('ubuntu:latest', stream=True, decode=True)
         self.client_mock.wait.assert_called_once_with('some_id')
-        self.assertEqual(
-            operator.cli.pull('ubuntu:latest', stream=True, decode=True), self.client_mock.pull.return_value
+        assert (
+            operator.cli.pull('ubuntu:latest', stream=True, decode=True) == self.client_mock.pull.return_value
         )
 
     def test_private_environment_is_private(self):
         operator = DockerOperator(
             private_environment={'PRIVATE': 'MESSAGE'}, image='ubuntu:latest', task_id='unittest'
         )
-        self.assertEqual(
-            operator._private_environment,
-            {'PRIVATE': 'MESSAGE'},
-            "To keep this private, it must be an underscored attribute.",
-        )
+        assert operator._private_environment == {
+            'PRIVATE': 'MESSAGE'
+        }, "To keep this private, it must be an underscored attribute."
 
     @mock.patch('airflow.providers.docker.operators.docker.tls.TLSConfig')
     def test_execute_tls(self, tls_class_mock):
@@ -165,8 +167,17 @@ class TestDockerOperator(unittest.TestCase):
     def test_execute_container_fails(self):
         self.client_mock.wait.return_value = {"StatusCode": 1}
         operator = DockerOperator(image='ubuntu', owner='unittest', task_id='unittest')
-        with self.assertRaises(AirflowException):
+        with pytest.raises(AirflowException):
             operator.execute(None)
+
+    def test_auto_remove_container_fails(self):
+        self.client_mock.wait.return_value = {"StatusCode": 1}
+        operator = DockerOperator(image='ubuntu', owner='unittest', task_id='unittest', auto_remove=True)
+        operator.container = {'Id': 'some_id'}
+        with pytest.raises(AirflowException):
+            operator.execute(None)
+
+        self.client_mock.remove_container.assert_called_once_with('some_id')
 
     @staticmethod
     def test_on_kill():
@@ -192,7 +203,7 @@ class TestDockerOperator(unittest.TestCase):
         )
 
         operator.execute(None)
-        self.assertEqual(operator.get_hook.call_count, 0, 'Hook called though no docker_conn_id configured')
+        assert operator.get_hook.call_count == 0, 'Hook called though no docker_conn_id configured'
 
     @mock.patch('airflow.providers.docker.operators.docker.DockerHook')
     def test_execute_with_docker_conn_id_use_hook(self, hook_class_mock):
@@ -211,13 +222,9 @@ class TestDockerOperator(unittest.TestCase):
 
         operator.execute(None)
 
-        self.assertEqual(
-            self.client_class_mock.call_count, 0, 'Client was called on the operator instead of the hook'
-        )
-        self.assertEqual(
-            hook_class_mock.call_count, 1, 'Hook was not called although docker_conn_id configured'
-        )
-        self.assertEqual(self.client_mock.pull.call_count, 1, 'Image was not pulled using operator client')
+        assert self.client_class_mock.call_count == 0, 'Client was called on the operator instead of the hook'
+        assert hook_class_mock.call_count == 1, 'Hook was not called although docker_conn_id configured'
+        assert self.client_mock.pull.call_count == 1, 'Image was not pulled using operator client'
 
     def test_execute_xcom_behavior(self):
         self.client_mock.pull.return_value = [b'{"status":"pull log"}']
@@ -245,23 +252,23 @@ class TestDockerOperator(unittest.TestCase):
         xcom_push_result = xcom_push_operator.execute(None)
         no_xcom_push_result = no_xcom_push_operator.execute(None)
 
-        self.assertEqual(xcom_push_result, b'container log')
-        self.assertIs(no_xcom_push_result, None)
+        assert xcom_push_result == b'container log'
+        assert no_xcom_push_result is None
 
     def test_extra_hosts(self):
         hosts_obj = mock.Mock()
         operator = DockerOperator(task_id='test', image='test', extra_hosts=hosts_obj)
         operator.execute(None)
         self.client_mock.create_container.assert_called_once()
-        self.assertIn(
-            'host_config',
-            self.client_mock.create_container.call_args.kwargs,
-        )
-        self.assertIn(
-            'extra_hosts',
-            self.client_mock.create_host_config.call_args.kwargs,
-        )
-        self.assertIs(
-            hosts_obj,
-            self.client_mock.create_host_config.call_args.kwargs['extra_hosts'],
-        )
+        assert 'host_config' in self.client_mock.create_container.call_args[1]
+        assert 'extra_hosts' in self.client_mock.create_host_config.call_args[1]
+        assert hosts_obj is self.client_mock.create_host_config.call_args[1]['extra_hosts']
+
+    def test_privileged(self):
+        privileged = mock.Mock()
+        operator = DockerOperator(task_id='test', image='test', privileged=privileged)
+        operator.execute(None)
+        self.client_mock.create_container.assert_called_once()
+        assert 'host_config' in self.client_mock.create_container.call_args[1]
+        assert 'privileged' in self.client_mock.create_host_config.call_args[1]
+        assert privileged is self.client_mock.create_host_config.call_args[1]['privileged']

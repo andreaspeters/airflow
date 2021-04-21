@@ -16,12 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-"""
-This module contains Google Cloud Transfer operators.
-"""
+"""This module contains Google Cloud Transfer operators."""
 from copy import deepcopy
 from datetime import date, time
-from typing import Dict, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Union
 
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
@@ -39,6 +37,7 @@ from airflow.providers.google.cloud.hooks.cloud_storage_transfer_service import 
     HTTP_DATA_SOURCE,
     MINUTES,
     MONTH,
+    NAME,
     OBJECT_CONDITIONS,
     PROJECT_ID,
     SCHEDULE,
@@ -58,41 +57,39 @@ from airflow.utils.decorators import apply_defaults
 
 
 class TransferJobPreprocessor:
-    """
-    Helper class for preprocess of transfer job body.
-    """
+    """Helper class for preprocess of transfer job body."""
 
     def __init__(self, body: dict, aws_conn_id: str = 'aws_default', default_schedule: bool = False) -> None:
         self.body = body
         self.aws_conn_id = aws_conn_id
         self.default_schedule = default_schedule
 
-    def _inject_aws_credentials(self):
+    def _inject_aws_credentials(self) -> None:
         if TRANSFER_SPEC in self.body and AWS_S3_DATA_SOURCE in self.body[TRANSFER_SPEC]:
             aws_hook = AwsBaseHook(self.aws_conn_id, resource_type="s3")
             aws_credentials = aws_hook.get_credentials()
-            aws_access_key_id = aws_credentials.access_key
-            aws_secret_access_key = aws_credentials.secret_key
+            aws_access_key_id = aws_credentials.access_key  # type: ignore[attr-defined]
+            aws_secret_access_key = aws_credentials.secret_key  # type: ignore[attr-defined]
             self.body[TRANSFER_SPEC][AWS_S3_DATA_SOURCE][AWS_ACCESS_KEY] = {
                 ACCESS_KEY_ID: aws_access_key_id,
                 SECRET_ACCESS_KEY: aws_secret_access_key,
             }
 
-    def _reformat_date(self, field_key):
+    def _reformat_date(self, field_key: str) -> None:
         schedule = self.body[SCHEDULE]
         if field_key not in schedule:
             return
         if isinstance(schedule[field_key], date):
             schedule[field_key] = self._convert_date_to_dict(schedule[field_key])
 
-    def _reformat_time(self, field_key):
+    def _reformat_time(self, field_key: str) -> None:
         schedule = self.body[SCHEDULE]
         if field_key not in schedule:
             return
         if isinstance(schedule[field_key], time):
             schedule[field_key] = self._convert_time_to_dict(schedule[field_key])
 
-    def _reformat_schedule(self):
+    def _reformat_schedule(self) -> None:
         if SCHEDULE not in self.body:
             if self.default_schedule:
                 self.body[SCHEDULE] = {SCHEDULE_START_DATE: date.today(), SCHEDULE_END_DATE: date.today()}
@@ -102,7 +99,7 @@ class TransferJobPreprocessor:
         self._reformat_date(SCHEDULE_END_DATE)
         self._reformat_time(START_TIME_OF_DAY)
 
-    def process_body(self):
+    def process_body(self) -> dict:
         """
         Injects AWS credentials into body if needed and
         reformats schedule information.
@@ -110,30 +107,23 @@ class TransferJobPreprocessor:
         :return: Preprocessed body
         :rtype: dict
         """
-
         self._inject_aws_credentials()
         self._reformat_schedule()
         return self.body
 
     @staticmethod
-    def _convert_date_to_dict(field_date):
-        """
-        Convert native python ``datetime.date`` object  to a format supported by the API
-        """
+    def _convert_date_to_dict(field_date: date) -> dict:
+        """Convert native python ``datetime.date`` object  to a format supported by the API"""
         return {DAY: field_date.day, MONTH: field_date.month, YEAR: field_date.year}
 
     @staticmethod
-    def _convert_time_to_dict(time_object):
-        """
-        Convert native python ``datetime.time`` object  to a format supported by the API
-        """
+    def _convert_time_to_dict(time_object: time) -> dict:
+        """Convert native python ``datetime.time`` object  to a format supported by the API"""
         return {HOURS: time_object.hour, MINUTES: time_object.minute, SECONDS: time_object.second}
 
 
 class TransferJobValidator:
-    """
-    Helper class for validating transfer job body.
-    """
+    """Helper class for validating transfer job body."""
 
     def __init__(self, body: dict) -> None:
         if not body:
@@ -141,7 +131,7 @@ class TransferJobValidator:
 
         self.body = body
 
-    def _verify_data_source(self):
+    def _verify_data_source(self) -> None:
         is_gcs = GCS_DATA_SOURCE in self.body[TRANSFER_SPEC]
         is_aws_s3 = AWS_S3_DATA_SOURCE in self.body[TRANSFER_SPEC]
         is_http = HTTP_DATA_SOURCE in self.body[TRANSFER_SPEC]
@@ -153,7 +143,7 @@ class TransferJobValidator:
                 "gcsDataSource, awsS3DataSource and httpDataSource."
             )
 
-    def _restrict_aws_credentials(self):
+    def _restrict_aws_credentials(self) -> None:
         aws_transfer = AWS_S3_DATA_SOURCE in self.body[TRANSFER_SPEC]
         if aws_transfer and AWS_ACCESS_KEY in self.body[TRANSFER_SPEC][AWS_S3_DATA_SOURCE]:
             raise AirflowException(
@@ -161,7 +151,7 @@ class TransferJobValidator:
                 "please use Airflow connections to store credentials."
             )
 
-    def validate_body(self):
+    def validate_body(self) -> None:
         """
         Validates the body. Checks if body specifies `transferSpec`
         if yes, then check if AWS credentials are passed correctly and
@@ -248,10 +238,10 @@ class CloudDataTransferServiceCreateJobOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         TransferJobValidator(body=self.body).validate_body()
 
-    def execute(self, context):
+    def execute(self, context) -> dict:
         TransferJobPreprocessor(body=self.body, aws_conn_id=self.aws_conn_id).process_body()
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
@@ -330,12 +320,12 @@ class CloudDataTransferServiceUpdateJobOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         TransferJobValidator(body=self.body).validate_body()
         if not self.job_name:
             raise AirflowException("The required parameter 'job_name' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> dict:
         TransferJobPreprocessor(body=self.body, aws_conn_id=self.aws_conn_id).process_body()
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
@@ -406,11 +396,11 @@ class CloudDataTransferServiceDeleteJobOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if not self.job_name:
             raise AirflowException("The required parameter 'job_name' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         self._validate_inputs()
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
@@ -472,11 +462,11 @@ class CloudDataTransferServiceGetOperationOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> dict:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -546,11 +536,11 @@ class CloudDataTransferServiceListOperationsOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if not self.filter:
             raise AirflowException("The required parameter 'filter' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> List[dict]:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -612,11 +602,11 @@ class CloudDataTransferServicePauseOperationOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -676,11 +666,11 @@ class CloudDataTransferServiceResumeOperationOperator(BaseOperator):
         self._validate_inputs()
         super().__init__(**kwargs)
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -741,11 +731,11 @@ class CloudDataTransferServiceCancelOperationOperator(BaseOperator):
         self.google_impersonation_chain = google_impersonation_chain
         self._validate_inputs()
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if not self.operation_name:
             raise AirflowException("The required parameter 'operation_name' is empty or None")
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = CloudDataTransferServiceHook(
             api_version=self.api_version,
             gcp_conn_id=self.gcp_conn_id,
@@ -809,7 +799,8 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
     :param transfer_options: Optional transfer service transfer options; see
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/TransferSpec
     :type transfer_options: dict
-    :param wait: Wait for transfer to finish
+    :param wait: Wait for transfer to finish. It must be set to True, if
+        'delete_job_after_completion' is set to True.
     :type wait: bool
     :param timeout: Time to wait for the operation to end in seconds. Defaults to 60 seconds if not specified.
     :type timeout: Optional[Union[float, timedelta]]
@@ -822,6 +813,9 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type google_impersonation_chain: Union[str, Sequence[str]]
+    :param delete_job_after_completion: If True, delete the job after complete.
+        If set to True, 'wait' must be set to True.
+    :type delete_job_after_completion: bool
     """
 
     template_fields = (
@@ -851,6 +845,7 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
         wait: bool = True,
         timeout: Optional[float] = None,
         google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delete_job_after_completion: bool = False,
         **kwargs,
     ) -> None:
 
@@ -868,8 +863,14 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
         self.wait = wait
         self.timeout = timeout
         self.google_impersonation_chain = google_impersonation_chain
+        self.delete_job_after_completion = delete_job_after_completion
+        self._validate_inputs()
 
-    def execute(self, context):
+    def _validate_inputs(self) -> None:
+        if self.delete_job_after_completion and not self.wait:
+            raise AirflowException("If 'delete_job_after_completion' is True, then 'wait' must also be True.")
+
+    def execute(self, context) -> None:
         hook = CloudDataTransferServiceHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -883,8 +884,10 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
 
         if self.wait:
             hook.wait_for_transfer_job(job, timeout=self.timeout)
+            if self.delete_job_after_completion:
+                hook.delete_transfer_job(job_name=job[NAME], project_id=self.project_id)
 
-    def _create_body(self):
+    def _create_body(self) -> dict:
         body = {
             DESCRIPTION: self.description,
             STATUS: GcpTransferJobsStatus.ENABLED,
@@ -901,10 +904,10 @@ class CloudDataTransferServiceS3ToGCSOperator(BaseOperator):
             body[SCHEDULE] = self.schedule
 
         if self.object_conditions is not None:
-            body[TRANSFER_SPEC][OBJECT_CONDITIONS] = self.object_conditions
+            body[TRANSFER_SPEC][OBJECT_CONDITIONS] = self.object_conditions  # type: ignore[index]
 
         if self.transfer_options is not None:
-            body[TRANSFER_SPEC][TRANSFER_OPTIONS] = self.transfer_options
+            body[TRANSFER_SPEC][TRANSFER_OPTIONS] = self.transfer_options  # type: ignore[index]
 
         return body
 
@@ -966,7 +969,8 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
     :param transfer_options: Optional transfer service transfer options; see
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/TransferSpec#TransferOptions
     :type transfer_options: dict
-    :param wait: Wait for transfer to finish; defaults to `True`
+    :param wait: Wait for transfer to finish. It must be set to True, if
+        'delete_job_after_completion' is set to True.
     :type wait: bool
     :param timeout: Time to wait for the operation to end in seconds. Defaults to 60 seconds if not specified.
     :type timeout: Optional[Union[float, timedelta]]
@@ -979,6 +983,9 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type google_impersonation_chain: Union[str, Sequence[str]]
+    :param delete_job_after_completion: If True, delete the job after complete.
+        If set to True, 'wait' must be set to True.
+    :type delete_job_after_completion: bool
     """
 
     template_fields = (
@@ -1007,6 +1014,7 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
         wait: bool = True,
         timeout: Optional[float] = None,
         google_impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        delete_job_after_completion: bool = False,
         **kwargs,
     ) -> None:
 
@@ -1023,8 +1031,14 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
         self.wait = wait
         self.timeout = timeout
         self.google_impersonation_chain = google_impersonation_chain
+        self.delete_job_after_completion = delete_job_after_completion
+        self._validate_inputs()
 
-    def execute(self, context):
+    def _validate_inputs(self) -> None:
+        if self.delete_job_after_completion and not self.wait:
+            raise AirflowException("If 'delete_job_after_completion' is True, then 'wait' must also be True.")
+
+    def execute(self, context) -> None:
         hook = CloudDataTransferServiceHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -1039,8 +1053,10 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
 
         if self.wait:
             hook.wait_for_transfer_job(job, timeout=self.timeout)
+            if self.delete_job_after_completion:
+                hook.delete_transfer_job(job_name=job[NAME], project_id=self.project_id)
 
-    def _create_body(self):
+    def _create_body(self) -> dict:
         body = {
             DESCRIPTION: self.description,
             STATUS: GcpTransferJobsStatus.ENABLED,
@@ -1057,9 +1073,9 @@ class CloudDataTransferServiceGCSToGCSOperator(BaseOperator):
             body[SCHEDULE] = self.schedule
 
         if self.object_conditions is not None:
-            body[TRANSFER_SPEC][OBJECT_CONDITIONS] = self.object_conditions
+            body[TRANSFER_SPEC][OBJECT_CONDITIONS] = self.object_conditions  # type: ignore[index]
 
         if self.transfer_options is not None:
-            body[TRANSFER_SPEC][TRANSFER_OPTIONS] = self.transfer_options
+            body[TRANSFER_SPEC][TRANSFER_OPTIONS] = self.transfer_options  # type: ignore[index]
 
         return body

@@ -15,12 +15,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google Ad to GCS operators.
-"""
+"""This module contains Google Ad to GCS operators."""
 import csv
 from tempfile import NamedTemporaryFile
-from typing import Dict, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 from airflow.models import BaseOperator
 from airflow.providers.google.ads.hooks.ads import GoogleAdsHook
@@ -37,7 +35,7 @@ class GoogleAdsListAccountsOperator(BaseOperator):
     not necessarily include all accounts within the account hierarchy; rather, it will only include
     accounts where your authenticated user has been added with admin or other rights in the account.
 
-    ..seealso::
+    .. seealso::
         https://developers.google.com/google-ads/api/reference/rpc
 
 
@@ -53,8 +51,6 @@ class GoogleAdsListAccountsOperator(BaseOperator):
     :type gcp_conn_id: str
     :param google_ads_conn_id: Airflow Google Ads connection ID
     :type google_ads_conn_id: str
-    :param page_size: The number of results per API page request. Max 10,000
-    :type page_size: int
     :param gzip: Option to compress local file or file data for upload
     :type gzip: bool
     :param impersonation_chain: Optional service account to impersonate using short-term
@@ -94,7 +90,7 @@ class GoogleAdsListAccountsOperator(BaseOperator):
         self.gzip = gzip
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> str:
         uri = f"gs://{self.bucket}/{self.object_name}"
 
         ads_hook = GoogleAdsHook(gcp_conn_id=self.gcp_conn_id, google_ads_conn_id=self.google_ads_conn_id)

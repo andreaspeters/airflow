@@ -17,7 +17,7 @@
 # under the License.
 
 import json
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from airflow.models import BaseOperator
 from airflow.providers.slack.hooks.slack import SlackHook
@@ -28,7 +28,7 @@ class SlackAPIOperator(BaseOperator):
     """
     Base Slack Operator
     The SlackAPIPostOperator is derived from this operator.
-    In the future additional Slack API Operators will be derived from this class as well
+    In the future additional Slack API Operators will be derived from this class as well.
     Only one of `slack_conn_id` and `token` is required.
 
     :param slack_conn_id: Slack connection ID which its password is Slack API token. Optional
@@ -40,7 +40,7 @@ class SlackAPIOperator(BaseOperator):
     :param api_params: API Method call parameters (https://api.slack.com/methods). Optional
     :type api_params: dict
     :param client_args: Slack Hook parameters. Optional. Check airflow.providers.slack.hooks.SlackHook
-    :type api_params: dict
+    :type client_args: dict
     """
 
     @apply_defaults
@@ -61,7 +61,7 @@ class SlackAPIOperator(BaseOperator):
         self.method = method
         self.api_params = api_params
 
-    def construct_api_call_params(self):
+    def construct_api_call_params(self) -> Any:
         """
         Used by the execute function. Allows templating on the source fields
         of the api_call_params dict before construction
@@ -135,7 +135,7 @@ class SlackAPIPostOperator(SlackAPIOperator):
         attachments: Optional[List] = None,
         blocks: Optional[List] = None,
         **kwargs,
-    ):
+    ) -> None:
         self.method = 'chat.postMessage'
         self.channel = channel
         self.username = username
@@ -145,7 +145,7 @@ class SlackAPIPostOperator(SlackAPIOperator):
         self.blocks = blocks or []
         super().__init__(method=self.method, **kwargs)
 
-    def construct_api_call_params(self):
+    def construct_api_call_params(self) -> Any:
         self.api_params = {
             'channel': self.channel,
             'username': self.username,
@@ -199,16 +199,16 @@ class SlackAPIFileOperator(SlackAPIOperator):
         filetype: str = 'csv',
         content: str = 'default,content,csv,file',
         **kwargs,
-    ):
+    ) -> None:
         self.method = 'files.upload'
         self.channel = channel
         self.initial_comment = initial_comment
         self.filename = filename
         self.filetype = filetype
         self.content = content
-        super(SlackAPIFileOperator, self).__init__(method=self.method, **kwargs)
+        super().__init__(method=self.method, **kwargs)
 
-    def construct_api_call_params(self):
+    def construct_api_call_params(self) -> Any:
         self.api_params = {
             'channels': self.channel,
             'content': self.content,

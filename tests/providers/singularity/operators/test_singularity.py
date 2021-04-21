@@ -17,9 +17,9 @@
 # under the License.
 
 import unittest
+from unittest import mock
 
-import mock
-import six
+import pytest
 from parameterized import parameterized
 from spython.instance import Instance
 
@@ -49,7 +49,7 @@ class SingularityOperatorTestCase(unittest.TestCase):
         client_mock.execute.assert_called_once_with(mock.ANY, "echo hello", return_result=True)
 
         execute_args, _ = client_mock.execute.call_args
-        self.assertIs(execute_args[0], instance)
+        assert execute_args[0] is instance
 
         instance.start.assert_called_once_with()
         instance.stop.assert_called_once_with()
@@ -62,7 +62,7 @@ class SingularityOperatorTestCase(unittest.TestCase):
     )
     def test_command_is_required(self, command):
         task = SingularityOperator(task_id='task-id', image="docker://busybox", command=command)
-        with six.assertRaisesRegex(self, AirflowException, "You must define a command."):
+        with pytest.raises(AirflowException, match="You must define a command."):
             task.execute({})
 
     @mock.patch('airflow.providers.singularity.operators.singularity.Client')

@@ -20,6 +20,7 @@
 import unittest
 from unittest import mock
 
+import pytest
 from zdesk import RateLimitError
 
 from airflow.providers.zendesk.hooks.zendesk import ZendeskHook
@@ -41,7 +42,7 @@ class TestZendeskHook(unittest.TestCase):
         zendesk_hook = ZendeskHook("conn_id")
         zendesk_hook.get_conn = mock.Mock(return_value=conn_mock)
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             zendesk_hook.call("some_path", get_all_pages=False)
             mocked_time.sleep.assert_called_once_with(sleep_time)
 
@@ -58,7 +59,7 @@ class TestZendeskHook(unittest.TestCase):
         mock_conn.call = mock_call
         zendesk_hook.get_conn = mock.Mock(return_value=mock_conn)
         zendesk_hook.call("path", get_all_pages=False)
-        mock_call.assert_called_once_with("path", None)
+        mock_call.assert_called_once_with("path", {})
 
     @mock.patch("airflow.providers.zendesk.hooks.zendesk.Zendesk")
     def test_returns_multiple_pages_if_get_all_pages_true(self, _):

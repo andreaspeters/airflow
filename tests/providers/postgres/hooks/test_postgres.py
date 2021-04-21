@@ -73,7 +73,7 @@ class TestPostgresHookConn(unittest.TestCase):
     @mock.patch('airflow.providers.postgres.hooks.postgres.psycopg2.connect')
     def test_get_conn_with_invalid_cursor(self, mock_connect):
         self.connection.extra = '{"cursor": "mycursor"}'
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             self.db_hook.get_conn()
 
     @mock.patch('airflow.providers.postgres.hooks.postgres.psycopg2.connect')
@@ -105,11 +105,19 @@ class TestPostgresHookConn(unittest.TestCase):
         )
 
     @mock.patch('airflow.providers.postgres.hooks.postgres.psycopg2.connect')
+    def test_get_conn_extra(self, mock_connect):
+        self.connection.extra = '{"connect_timeout": 3}'
+        self.db_hook.get_conn()
+        mock_connect.assert_called_once_with(
+            user='login', password='password', host='host', dbname='schema', port=None, connect_timeout=3
+        )
+
+    @mock.patch('airflow.providers.postgres.hooks.postgres.psycopg2.connect')
     @mock.patch('airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook.get_client_type')
     def test_get_conn_rds_iam_redshift(self, mock_client, mock_connect):
-        self.connection.extra = '{"iam":true, "redshift":true}'
+        self.connection.extra = '{"iam":true, "redshift":true, "cluster-identifier": "different-identifier"}'
         self.connection.host = 'cluster-identifier.ccdfre4hpd39h.us-east-1.redshift.amazonaws.com'
-        login = 'IAM:{login}'.format(login=self.connection.login)
+        login = f'IAM:{self.connection.login}'
         mock_client.return_value.get_cluster_credentials.return_value = {
             'DbPassword': 'aws_token',
             'DbUser': login,
@@ -145,7 +153,7 @@ class TestPostgresHook(unittest.TestCase):
 
         with PostgresHook().get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("DROP TABLE IF EXISTS {}".format(self.table))
+                cur.execute(f"DROP TABLE IF EXISTS {self.table}")
 
     @pytest.mark.backend("postgres")
     def test_copy_expert(self):
@@ -156,13 +164,13 @@ class TestPostgresHook(unittest.TestCase):
 
             self.cur.fetchall.return_value = None
 
-            self.assertEqual(None, self.db_hook.copy_expert(statement, filename))
+            assert self.db_hook.copy_expert(statement, filename) is None
 
             assert self.conn.close.call_count == 1
             assert self.cur.close.call_count == 1
             assert self.conn.commit.call_count == 1
             self.cur.copy_expert.assert_called_once_with(statement, open_mock.return_value)
-            self.assertEqual(open_mock.call_args[0], (filename, "r+"))
+            assert open_mock.call_args[0] == (filename, "r+")
 
     @pytest.mark.backend("postgres")
     def test_bulk_load(self):
@@ -171,7 +179,7 @@ class TestPostgresHook(unittest.TestCase):
 
         with hook.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("CREATE TABLE {} (c VARCHAR)".format(self.table))
+                cur.execute(f"CREATE TABLE {self.table} (c VARCHAR)")
                 conn.commit()
 
                 with NamedTemporaryFile() as f:
@@ -179,10 +187,10 @@ class TestPostgresHook(unittest.TestCase):
                     f.flush()
                     hook.bulk_load(self.table, f.name)
 
-                cur.execute("SELECT * FROM {}".format(self.table))
+                cur.execute(f"SELECT * FROM {self.table}")
                 results = [row[0] for row in cur.fetchall()]
 
-        self.assertEqual(sorted(input_data), sorted(results))
+        assert sorted(input_data) == sorted(results)
 
     @pytest.mark.backend("postgres")
     def test_bulk_dump(self):
@@ -191,9 +199,9 @@ class TestPostgresHook(unittest.TestCase):
 
         with hook.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("CREATE TABLE {} (c VARCHAR)".format(self.table))
-                values = ",".join("('{}')".format(data) for data in input_data)
-                cur.execute("INSERT INTO {} VALUES {}".format(self.table, values))
+                cur.execute(f"CREATE TABLE {self.table} (c VARCHAR)")
+                values = ",".join(f"('{data}')" for data in input_data)
+                cur.execute(f"INSERT INTO {self.table} VALUES {values}")
                 conn.commit()
 
                 with NamedTemporaryFile() as f:
@@ -201,7 +209,7 @@ class TestPostgresHook(unittest.TestCase):
                     f.seek(0)
                     results = [line.rstrip().decode("utf-8") for line in f.readlines()]
 
-        self.assertEqual(sorted(input_data), sorted(results))
+        assert sorted(input_data) == sorted(results)
 
     @pytest.mark.backend("postgres")
     def test_insert_rows(self):
@@ -214,9 +222,9 @@ class TestPostgresHook(unittest.TestCase):
         assert self.cur.close.call_count == 1
 
         commit_count = 2  # The first and last commit
-        self.assertEqual(commit_count, self.conn.commit.call_count)
+        assert commit_count == self.conn.commit.call_count
 
-        sql = "INSERT INTO {}  VALUES (%s)".format(table)
+        sql = f"INSERT INTO {table}  VALUES (%s)"
         for row in rows:
             self.cur.execute.assert_any_call(sql, row)
 
@@ -241,7 +249,7 @@ class TestPostgresHook(unittest.TestCase):
         assert self.cur.close.call_count == 1
 
         commit_count = 2  # The first and last commit
-        self.assertEqual(commit_count, self.conn.commit.call_count)
+        assert commit_count == self.conn.commit.call_count
 
         sql = (
             "INSERT INTO {0} ({1}, {2}) VALUES (%s,%s) "
@@ -291,8 +299,8 @@ class TestPostgresHook(unittest.TestCase):
 
         with hook.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("CREATE TABLE {} (c VARCHAR)".format(self.table))
-                values = ",".join("('{}')".format(data) for data in input_data)
-                cur.execute("INSERT INTO {} VALUES {}".format(self.table, values))
+                cur.execute(f"CREATE TABLE {self.table} (c VARCHAR)")
+                values = ",".join(f"('{data}')" for data in input_data)
+                cur.execute(f"INSERT INTO {self.table} VALUES {values}")
                 conn.commit()
-                self.assertEqual(cur.rowcount, len(input_data))
+                assert cur.rowcount == len(input_data)

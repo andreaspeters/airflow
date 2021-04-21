@@ -17,8 +17,7 @@
 # under the License.
 
 import unittest
-
-import mock
+from unittest import mock
 
 from airflow.providers.google.cloud.operators.translate import CloudTranslateTextOperator
 
@@ -59,14 +58,11 @@ class TestCloudTranslate(unittest.TestCase):
             source_language=None,
             model='base',
         )
-        self.assertEqual(
-            [
-                {
-                    'translatedText': 'Yellowing self Gęśle',
-                    'detectedSourceLanguage': 'pl',
-                    'model': 'base',
-                    'input': 'zażółć gęślą jaźń',
-                }
-            ],
-            return_value,
-        )
+        assert [
+            {
+                'translatedText': 'Yellowing self Gęśle',
+                'detectedSourceLanguage': 'pl',
+                'model': 'base',
+                'input': 'zażółć gęślą jaźń',
+            }
+        ] == return_value

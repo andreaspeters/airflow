@@ -15,7 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Dict, List, Sequence
+from typing import Sequence
 
 from airflow.models import BaseOperator
 from airflow.providers.microsoft.azure.hooks.azure_data_lake import AzureDataLakeHook
@@ -32,8 +32,7 @@ class AzureDataLakeStorageListOperator(BaseOperator):
     :param path: The Azure Data Lake path to find the objects. Supports glob
         strings (templated)
     :type path: str
-    :param azure_data_lake_conn_id: The connection ID to use when
-        connecting to Azure Data Lake Storage.
+    :param azure_data_lake_conn_id: Reference to the :ref:`Azure Data Lake connection<howto/connection:adl>`.
     :type azure_data_lake_conn_id: str
 
     **Example**:
@@ -58,7 +57,7 @@ class AzureDataLakeStorageListOperator(BaseOperator):
         self.path = path
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
 
-    def execute(self, context: Dict[Any, Any]) -> List:
+    def execute(self, context: dict) -> list:
 
         hook = AzureDataLakeHook(azure_data_lake_conn_id=self.azure_data_lake_conn_id)
 

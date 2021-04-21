@@ -16,9 +16,12 @@
 # under the License.
 
 import logging
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
-from cached_property import cached_property
+try:
+    from functools import cached_property
+except ImportError:
+    from cached_property import cached_property
 
 from airflow.configuration import conf
 from airflow.models import TaskInstance
@@ -29,8 +32,9 @@ from airflow.utils.log.logging_mixin import ExternalLoggingMixin
 class TaskLogReader:
     """Task log reader"""
 
-    def read_log_chunks(self, ti: TaskInstance, try_number: Optional[int],
-                        metadata) -> Tuple[List[str], Dict[str, Any]]:
+    def read_log_chunks(
+        self, ti: TaskInstance, try_number: Optional[int], metadata
+    ) -> Tuple[List[Tuple[Tuple[str, str]]], Dict[str, str]]:
         """
         Reads chunks of Task Instance logs.
 
@@ -41,7 +45,7 @@ class TaskLogReader:
         :type try_number: Optional[int]
         :param metadata: A dictionary containing information about how to read the task log
         :type metadata: dict
-        :rtype: Tuple[List[str], Dict[str, Any]]
+        :rtype: Tuple[List[Tuple[Tuple[str, str]]], Dict[str, str]]
 
         The following is an example of how to use this method to read log:
 
@@ -54,13 +58,11 @@ class TaskLogReader:
         contain information about the task log which can enable you read logs to the
         end.
         """
-
         logs, metadatas = self.log_handler.read(ti, try_number, metadata=metadata)
         metadata = metadatas[0]
         return logs, metadata
 
-    def read_log_stream(self, ti: TaskInstance, try_number: Optional[int],
-                        metadata: dict) -> Iterator[str]:
+    def read_log_stream(self, ti: TaskInstance, try_number: Optional[int], metadata: dict) -> Iterator[str]:
         """
         Used to continuously read log to the end
 
@@ -72,7 +74,6 @@ class TaskLogReader:
         :type metadata: dict
         :rtype: Iterator[str]
         """
-
         if try_number is None:
             next_try = ti.next_try_number
             try_numbers = list(range(1, next_try))
@@ -90,7 +91,6 @@ class TaskLogReader:
     @cached_property
     def log_handler(self):
         """Log handler, which is configured to read logs."""
-
         logger = logging.getLogger('airflow.task')
         task_log_reader = conf.get('logging', 'task_log_reader')
         handler = next((handler for handler in logger.handlers if handler.name == task_log_reader), None)
@@ -99,7 +99,6 @@ class TaskLogReader:
     @property
     def supports_read(self):
         """Checks if a read operation is supported by a current log handler."""
-
         return hasattr(self.log_handler, 'read')
 
     @property
@@ -117,10 +116,8 @@ class TaskLogReader:
         :type try_number: Optional[int]
         :rtype: str
         """
-
         filename_template = conf.get('logging', 'LOG_FILENAME_TEMPLATE')
         attachment_filename = render_log_filename(
-            ti=ti,
-            try_number="all" if try_number is None else try_number,
-            filename_template=filename_template)
+            ti=ti, try_number="all" if try_number is None else try_number, filename_template=filename_template
+        )
         return attachment_filename

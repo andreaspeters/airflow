@@ -15,6 +15,15 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+export INSTALL_FROM_PYPI="false"
+export INSTALL_PROVIDERS_FROM_SOURCES="false"
+export INSTALL_FROM_DOCKER_CONTEXT_FILES="true"
+export AIRFLOW_PRE_CACHED_PIP_PACKAGES="false"
+export DOCKER_CACHE="pulled"
+export VERBOSE="true"
+
+
 # shellcheck source=scripts/ci/libraries/_script_init.sh
 . "$( dirname "${BASH_SOURCE[0]}" )/../libraries/_script_init.sh"
 
@@ -23,21 +32,35 @@
 function build_prod_images_on_ci() {
     build_images::prepare_prod_build
 
-    rm -rf "${BUILD_CACHE_DIR}"
-    mkdir -pv "${BUILD_CACHE_DIR}"
-
     if [[ ${USE_GITHUB_REGISTRY} == "true" && ${GITHUB_REGISTRY_WAIT_FOR_IMAGE} == "true" ]]; then
-
-        # Tries to wait for the image indefinitely
+        # Tries to wait for the images indefinitely
         # skips further image checks - since we already have the target image
 
+        local python_tag_suffix=""
+        if [[ ${GITHUB_REGISTRY_PULL_IMAGE_TAG} != "latest" ]]; then
+            python_tag_suffix="-${GITHUB_REGISTRY_PULL_IMAGE_TAG}"
+        fi
+
+        if [[ "${WAIT_FOR_PYTHON_BASE_IMAGE=}" == "true" ]]; then
+            # first we pull base python image. We will need it to re-push it after master build
+            # Becoming the new "latest" image for other builds
+            build_images::wait_for_image_tag "${GITHUB_REGISTRY_PYTHON_BASE_IMAGE}" \
+                "${python_tag_suffix}" "${AIRFLOW_PYTHON_BASE_IMAGE}"
+        fi
+
+        # And then the actual image
         build_images::wait_for_image_tag "${GITHUB_REGISTRY_AIRFLOW_PROD_IMAGE}" \
             ":${GITHUB_REGISTRY_PULL_IMAGE_TAG}" "${AIRFLOW_PROD_IMAGE}"
 
-        build_images::wait_for_image_tag "${GITHUB_REGISTRY_AIRFLOW_PROD_BUILD_IMAGE}" \
-            ":${GITHUB_REGISTRY_PULL_IMAGE_TAG}" "${AIRFLOW_PROD_BUILD_IMAGE}"
+        # And the prod build image
+        if [[ "${WAIT_FOR_PROD_BUILD_IMAGE=}" == "true" ]]; then
+            # If specified in variable - also waits for the build image
+            build_images::wait_for_image_tag "${GITHUB_REGISTRY_AIRFLOW_PROD_BUILD_IMAGE}" \
+                ":${GITHUB_REGISTRY_PULL_IMAGE_TAG}" "${AIRFLOW_PROD_BUILD_IMAGE}"
+        fi
+
     else
-        build_images::build_prod_images
+        build_images::build_prod_images_from_locally_built_airflow_packages
     fi
 
 
@@ -46,6 +69,5 @@ function build_prod_images_on_ci() {
     unset FORCE_PULL_IMAGES
     unset FORCE_BUILD
 }
-
 
 build_prod_images_on_ci

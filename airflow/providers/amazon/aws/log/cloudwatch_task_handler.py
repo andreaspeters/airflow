@@ -17,7 +17,11 @@
 # under the License.
 
 import watchtower
-from cached_property import cached_property
+
+try:
+    from functools import cached_property
+except ImportError:
+    from cached_property import cached_property
 
 from airflow.configuration import conf
 from airflow.utils.log.file_task_handler import FileTaskHandler
@@ -39,7 +43,7 @@ class CloudwatchTaskHandler(FileTaskHandler, LoggingMixin):
     :type filename_template: str
     """
 
-    def __init__(self, base_log_folder, log_group_arn, filename_template):
+    def __init__(self, base_log_folder: str, log_group_arn: str, filename_template: str):
         super().__init__(base_log_folder, filename_template)
         split_arn = log_group_arn.split(':')
 
@@ -50,21 +54,21 @@ class CloudwatchTaskHandler(FileTaskHandler, LoggingMixin):
 
     @cached_property
     def hook(self):
-        """
-        Returns AwsLogsHook.
-        """
+        """Returns AwsLogsHook."""
         remote_conn_id = conf.get('logging', 'REMOTE_LOG_CONN_ID')
         try:
             from airflow.providers.amazon.aws.hooks.logs import AwsLogsHook
 
             return AwsLogsHook(aws_conn_id=remote_conn_id, region_name=self.region_name)
-        except Exception:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self.log.error(
                 'Could not create an AwsLogsHook with connection id "%s". '
                 'Please make sure that airflow[aws] is installed and '
-                'the Cloudwatch logs connection exists.',
+                'the Cloudwatch logs connection exists. Exception: "%s"',
                 remote_conn_id,
+                e,
             )
+            return None
 
     def _render_filename(self, ti, try_number):
         # Replace unsupported log group name characters
@@ -79,9 +83,7 @@ class CloudwatchTaskHandler(FileTaskHandler, LoggingMixin):
         )
 
     def close(self):
-        """
-        Close the handler responsible for the upload of the local log file to Cloudwatch.
-        """
+        """Close the handler responsible for the upload of the local log file to Cloudwatch."""
         # When application exit, system shuts down all handlers by
         # calling close method. Here we check if logger is already
         # closed to prevent uploading the log to remote storage multiple
@@ -103,7 +105,7 @@ class CloudwatchTaskHandler(FileTaskHandler, LoggingMixin):
             {'end_of_log': True},
         )
 
-    def get_cloudwatch_logs(self, stream_name):
+    def get_cloudwatch_logs(self, stream_name: str) -> str:
         """
         Return all logs from the given log stream.
 
@@ -111,8 +113,12 @@ class CloudwatchTaskHandler(FileTaskHandler, LoggingMixin):
         :return: string of all logs from the given log stream
         """
         try:
-            events = list(self.hook.get_log_events(log_group=self.log_group, log_stream_name=stream_name))
-            return '\n'.join(reversed([event['message'] for event in events]))
+            events = list(
+                self.hook.get_log_events(
+                    log_group=self.log_group, log_stream_name=stream_name, start_from_head=True
+                )
+            )
+            return '\n'.join([event['message'] for event in events])
         except Exception:  # pylint: disable=broad-except
             msg = 'Could not read remote logs from log_group: {} log_stream: {}.'.format(
                 self.log_group, stream_name

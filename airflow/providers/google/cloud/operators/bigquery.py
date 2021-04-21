@@ -17,15 +17,14 @@
 # under the License.
 
 # pylint: disable=too-many-lines
-"""
-This module contains Google BigQuery operators.
-"""
+"""This module contains Google BigQuery operators."""
 import enum
 import hashlib
 import json
 import re
 import uuid
 import warnings
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, SupportsAbs, Union
 
 import attr
@@ -35,7 +34,7 @@ from google.cloud.bigquery import TableReference
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator, BaseOperatorLink
 from airflow.models.taskinstance import TaskInstance
-from airflow.operators.check_operator import CheckOperator, IntervalCheckOperator, ValueCheckOperator
+from airflow.operators.sql import SQLCheckOperator, SQLIntervalCheckOperator, SQLValueCheckOperator
 from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook, BigQueryJob
 from airflow.providers.google.cloud.hooks.gcs import GCSHook, _parse_gcs_url
 from airflow.utils.decorators import apply_defaults
@@ -57,9 +56,7 @@ class BigQueryUIColors(enum.Enum):
 
 
 class BigQueryConsoleLink(BaseOperatorLink):
-    """
-    Helper class for constructing BigQuery link.
-    """
+    """Helper class for constructing BigQuery link."""
 
     name = 'BigQuery Console'
 
@@ -71,9 +68,7 @@ class BigQueryConsoleLink(BaseOperatorLink):
 
 @attr.s(auto_attribs=True)
 class BigQueryConsoleIndexableLink(BaseOperatorLink):
-    """
-    Helper class for constructing BigQuery link.
-    """
+    """Helper class for constructing BigQuery link."""
 
     index: int = attr.ib()
 
@@ -81,7 +76,7 @@ class BigQueryConsoleIndexableLink(BaseOperatorLink):
     def name(self) -> str:
         return f'BigQuery Console #{self.index + 1}'
 
-    def get_link(self, operator, dttm):
+    def get_link(self, operator: BaseOperator, dttm: datetime):
         ti = TaskInstance(task=operator, execution_date=dttm)
         job_ids = ti.xcom_pull(task_ids=operator.task_id, key='job_id')
         if not job_ids:
@@ -92,7 +87,19 @@ class BigQueryConsoleIndexableLink(BaseOperatorLink):
         return BIGQUERY_JOB_DETAILS_LINK_FMT.format(job_id=job_id)
 
 
-class BigQueryCheckOperator(CheckOperator):
+class _BigQueryDbHookMixin:
+    def get_db_hook(self) -> BigQueryHook:
+        """Get BigQuery DB Hook"""
+        return BigQueryHook(
+            gcp_conn_id=self.gcp_conn_id,
+            use_legacy_sql=self.use_legacy_sql,
+            location=self.location,
+            impersonation_chain=self.impersonation_chain,
+            labels=self.labels,
+        )
+
+
+class BigQueryCheckOperator(_BigQueryDbHookMixin, SQLCheckOperator):
     """
     Performs checks against BigQuery. The ``BigQueryCheckOperator`` expects
     a sql query that will return a single row. Each value on that
@@ -146,12 +153,15 @@ class BigQueryCheckOperator(CheckOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type impersonation_chain: Union[str, Sequence[str]]
+    :param labels: a dictionary containing labels for the table, passed to BigQuery
+    :type labels: dict
     """
 
     template_fields = (
         'sql',
         'gcp_conn_id',
         'impersonation_chain',
+        'labels',
     )
     template_ext = ('.sql',)
     ui_color = BigQueryUIColors.CHECK.value
@@ -166,6 +176,7 @@ class BigQueryCheckOperator(CheckOperator):
         use_legacy_sql: bool = True,
         location: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        labels: Optional[dict] = None,
         **kwargs,
     ) -> None:
         super().__init__(sql=sql, **kwargs)
@@ -178,17 +189,10 @@ class BigQueryCheckOperator(CheckOperator):
         self.use_legacy_sql = use_legacy_sql
         self.location = location
         self.impersonation_chain = impersonation_chain
-
-    def get_db_hook(self) -> BigQueryHook:
-        return BigQueryHook(
-            gcp_conn_id=self.gcp_conn_id,
-            use_legacy_sql=self.use_legacy_sql,
-            location=self.location,
-            impersonation_chain=self.impersonation_chain,
-        )
+        self.labels = labels
 
 
-class BigQueryValueCheckOperator(ValueCheckOperator):
+class BigQueryValueCheckOperator(_BigQueryDbHookMixin, SQLValueCheckOperator):
     """
     Performs a simple value check using sql code.
 
@@ -218,6 +222,8 @@ class BigQueryValueCheckOperator(ValueCheckOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type impersonation_chain: Union[str, Sequence[str]]
+    :param labels: a dictionary containing labels for the table, passed to BigQuery
+    :type labels: dict
     """
 
     template_fields = (
@@ -225,6 +231,7 @@ class BigQueryValueCheckOperator(ValueCheckOperator):
         'gcp_conn_id',
         'pass_value',
         'impersonation_chain',
+        'labels',
     )
     template_ext = ('.sql',)
     ui_color = BigQueryUIColors.CHECK.value
@@ -241,6 +248,7 @@ class BigQueryValueCheckOperator(ValueCheckOperator):
         use_legacy_sql: bool = True,
         location: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        labels: Optional[dict] = None,
         **kwargs,
     ) -> None:
         super().__init__(sql=sql, pass_value=pass_value, tolerance=tolerance, **kwargs)
@@ -253,17 +261,10 @@ class BigQueryValueCheckOperator(ValueCheckOperator):
         self.gcp_conn_id = gcp_conn_id
         self.use_legacy_sql = use_legacy_sql
         self.impersonation_chain = impersonation_chain
-
-    def get_db_hook(self) -> BigQueryHook:
-        return BigQueryHook(
-            gcp_conn_id=self.gcp_conn_id,
-            use_legacy_sql=self.use_legacy_sql,
-            location=self.location,
-            impersonation_chain=self.impersonation_chain,
-        )
+        self.labels = labels
 
 
-class BigQueryIntervalCheckOperator(IntervalCheckOperator):
+class BigQueryIntervalCheckOperator(_BigQueryDbHookMixin, SQLIntervalCheckOperator):
     """
     Checks that the values of metrics given as SQL expressions are within
     a certain tolerance of the ones from days_back before.
@@ -282,10 +283,10 @@ class BigQueryIntervalCheckOperator(IntervalCheckOperator):
     :param days_back: number of days between ds and the ds we want to check
         against. Defaults to 7 days
     :type days_back: int
-    :param metrics_threshold: a dictionary of ratios indexed by metrics, for
+    :param metrics_thresholds: a dictionary of ratios indexed by metrics, for
         example 'COUNT(*)': 1.5 would require a 50 percent or less difference
         between the current day, and the prior days_back.
-    :type metrics_threshold: dict
+    :type metrics_thresholds: dict
     :param use_legacy_sql: Whether to use legacy SQL (true)
         or standard SQL (false).
     :type use_legacy_sql: bool
@@ -306,6 +307,8 @@ class BigQueryIntervalCheckOperator(IntervalCheckOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type impersonation_chain: Union[str, Sequence[str]]
+    :param labels: a dictionary containing labels for the table, passed to BigQuery
+    :type labels: dict
     """
 
     template_fields = (
@@ -314,6 +317,7 @@ class BigQueryIntervalCheckOperator(IntervalCheckOperator):
         'sql1',
         'sql2',
         'impersonation_chain',
+        'labels',
     )
     ui_color = BigQueryUIColors.CHECK.value
 
@@ -330,6 +334,7 @@ class BigQueryIntervalCheckOperator(IntervalCheckOperator):
         use_legacy_sql: bool = True,
         location: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        labels: Optional[Dict] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -348,14 +353,7 @@ class BigQueryIntervalCheckOperator(IntervalCheckOperator):
         self.use_legacy_sql = use_legacy_sql
         self.location = location
         self.impersonation_chain = impersonation_chain
-
-    def get_db_hook(self) -> BigQueryHook:
-        return BigQueryHook(
-            gcp_conn_id=self.gcp_conn_id,
-            use_legacy_sql=self.use_legacy_sql,
-            location=self.location,
-            impersonation_chain=self.impersonation_chain,
-        )
+        self.labels = labels
 
 
 class BigQueryGetDataOperator(BaseOperator):
@@ -466,7 +464,7 @@ class BigQueryGetDataOperator(BaseOperator):
         self.location = location
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> list:
         self.log.info(
             'Fetching Data from %s.%s max results: %s', self.dataset_id, self.table_id, self.max_results
         )
@@ -569,8 +567,8 @@ class BigQueryExecuteQueryOperator(BaseOperator):
         partition by field, type and expiration as per API specifications.
     :type time_partitioning: dict
     :param cluster_fields: Request that the result of this query be stored sorted
-        by one or more columns. This is only available in conjunction with
-        time_partitioning. The order of columns given determines the sort order.
+        by one or more columns. BigQuery supports clustering for both partitioned and
+        non-partitioned tables. The order of columns given determines the sort order.
     :type cluster_fields: list[str]
     :param location: The geographic location of the job. Required except for
         US and EU. See details at
@@ -606,9 +604,7 @@ class BigQueryExecuteQueryOperator(BaseOperator):
 
     @property
     def operator_extra_links(self):
-        """
-        Return operator extra links
-        """
+        """Return operator extra links"""
         if isinstance(self.sql, str):
             return (BigQueryConsoleLink(),)
         return (BigQueryConsoleIndexableLink(i) for i, _ in enumerate(self.sql))
@@ -620,21 +616,21 @@ class BigQueryExecuteQueryOperator(BaseOperator):
         *,
         sql: Union[str, Iterable],
         destination_dataset_table: Optional[str] = None,
-        write_disposition: Optional[str] = 'WRITE_EMPTY',
+        write_disposition: str = 'WRITE_EMPTY',
         allow_large_results: Optional[bool] = False,
         flatten_results: Optional[bool] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         bigquery_conn_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         udf_config: Optional[list] = None,
-        use_legacy_sql: Optional[bool] = True,
+        use_legacy_sql: bool = True,
         maximum_billing_tier: Optional[int] = None,
         maximum_bytes_billed: Optional[float] = None,
-        create_disposition: Optional[str] = 'CREATE_IF_NEEDED',
+        create_disposition: str = 'CREATE_IF_NEEDED',
         schema_update_options: Optional[Union[list, tuple, set]] = None,
         query_params: Optional[list] = None,
         labels: Optional[dict] = None,
-        priority: Optional[str] = 'INTERACTIVE',
+        priority: str = 'INTERACTIVE',
         time_partitioning: Optional[dict] = None,
         api_resource_configs: Optional[dict] = None,
         cluster_fields: Optional[List[str]] = None,
@@ -736,12 +732,10 @@ class BigQueryExecuteQueryOperator(BaseOperator):
                 for s in self.sql
             ]
         else:
-            raise AirflowException(
-                "argument 'sql' of type {} is neither a string nor an iterable".format(type(str))
-            )
+            raise AirflowException(f"argument 'sql' of type {type(str)} is neither a string nor an iterable")
         context['task_instance'].xcom_push(key='job_id', value=job_id)
 
-    def on_kill(self):
+    def on_kill(self) -> None:
         super().on_kill()
         if self.hook is not None:
             self.log.info('Cancelling running query')
@@ -850,6 +844,8 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         .. seealso::
             https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#ViewDefinition
     :type view: dict
+    :param materialized_view: [Optional] The materialized view definition.
+    :type materialized_view: dict
     :param encryption_configuration: [Optional] Custom encryption configuration (e.g., Cloud KMS keys).
         **Example**: ::
 
@@ -860,8 +856,8 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
     :param location: The location used for the operation.
     :type location: str
     :param cluster_fields: [Optional] The fields used for clustering.
-            Must be specified with time_partitioning, data in the table will be first
-            partitioned and subsequently clustered.
+            BigQuery supports clustering for both partitioned and
+            non-partitioned tables.
 
             .. seealso::
                 https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#clustering.fields
@@ -875,6 +871,8 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type impersonation_chain: Union[str, Sequence[str]]
+    :param exists_ok: If ``True``, ignore "already exists" errors when creating the table.
+    :type exists_ok: bool
     """
 
     template_fields = (
@@ -884,9 +882,10 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         'gcs_schema_object',
         'labels',
         'view',
+        'materialized_view',
         'impersonation_chain',
     )
-
+    template_fields_renderers = {"table_resource": "json", "materialized_view": "json"}
     ui_color = BigQueryUIColors.TABLE.value
 
     # pylint: disable=too-many-arguments
@@ -906,10 +905,12 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         delegate_to: Optional[str] = None,
         labels: Optional[Dict] = None,
         view: Optional[Dict] = None,
+        materialized_view: Optional[Dict] = None,
         encryption_configuration: Optional[Dict] = None,
         location: Optional[str] = None,
         cluster_fields: Optional[List[str]] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        exists_ok: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -925,13 +926,15 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         self.time_partitioning = {} if time_partitioning is None else time_partitioning
         self.labels = labels
         self.view = view
+        self.materialized_view = materialized_view
         self.encryption_configuration = encryption_configuration
         self.location = location
         self.cluster_fields = cluster_fields
         self.table_resource = table_resource
         self.impersonation_chain = impersonation_chain
+        self.exists_ok = exists_ok
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         bq_hook = BigQueryHook(
             gcp_conn_id=self.bigquery_conn_id,
             delegate_to=self.delegate_to,
@@ -942,11 +945,11 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         if not self.schema_fields and self.gcs_schema_object:
             gcs_bucket, gcs_object = _parse_gcs_url(self.gcs_schema_object)
             gcs_hook = GCSHook(
-                google_cloud_storage_conn_id=self.google_cloud_storage_conn_id,
+                gcp_conn_id=self.google_cloud_storage_conn_id,
                 delegate_to=self.delegate_to,
                 impersonation_chain=self.impersonation_chain,
             )
-            schema_fields = json.loads(gcs_hook.download(gcs_bucket, gcs_object).decode("utf-8"))
+            schema_fields = json.loads(gcs_hook.download(gcs_bucket, gcs_object))
         else:
             schema_fields = self.schema_fields
 
@@ -961,9 +964,10 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
                 cluster_fields=self.cluster_fields,
                 labels=self.labels,
                 view=self.view,
+                materialized_view=self.materialized_view,
                 encryption_configuration=self.encryption_configuration,
                 table_resource=self.table_resource,
-                exists_ok=False,
+                exists_ok=self.exists_ok,
             )
             self.log.info(
                 'Table %s.%s.%s created successfully', table.project, table.dataset_id, table.table_id
@@ -1081,6 +1085,7 @@ class BigQueryCreateExternalTableOperator(BaseOperator):
         'table_resource',
         'impersonation_chain',
     )
+    template_fields_renderers = {"table_resource": "json"}
     ui_color = BigQueryUIColors.TABLE.value
 
     # pylint: disable=too-many-arguments,too-many-locals
@@ -1172,7 +1177,7 @@ class BigQueryCreateExternalTableOperator(BaseOperator):
         self.location = location
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         bq_hook = BigQueryHook(
             gcp_conn_id=self.bigquery_conn_id,
             delegate_to=self.delegate_to,
@@ -1182,12 +1187,11 @@ class BigQueryCreateExternalTableOperator(BaseOperator):
 
         if not self.schema_fields and self.schema_object and self.source_format != 'DATASTORE_BACKUP':
             gcs_hook = GCSHook(
-                google_cloud_storage_conn_id=self.google_cloud_storage_conn_id,
+                gcp_conn_id=self.google_cloud_storage_conn_id,
                 delegate_to=self.delegate_to,
                 impersonation_chain=self.impersonation_chain,
             )
-            schema_object = gcs_hook.download(self.bucket, self.schema_object)
-            schema_fields = json.loads(schema_object.decode("utf-8"))
+            schema_fields = json.loads(gcs_hook.download(self.bucket, self.schema_object))
         else:
             schema_fields = self.schema_fields
 
@@ -1309,7 +1313,7 @@ class BigQueryDeleteDatasetOperator(BaseOperator):
 
         super().__init__(**kwargs)
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         self.log.info('Dataset id: %s Project id: %s', self.dataset_id, self.project_id)
 
         bq_hook = BigQueryHook(
@@ -1360,6 +1364,8 @@ class BigQueryCreateEmptyDatasetOperator(BaseOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type impersonation_chain: Union[str, Sequence[str]]
+    :param exists_ok: If ``True``, ignore "already exists" errors when creating the dataset.
+    :type exists_ok: bool
         **Example**: ::
 
             create_new_dataset = BigQueryCreateEmptyDatasetOperator(
@@ -1377,6 +1383,7 @@ class BigQueryCreateEmptyDatasetOperator(BaseOperator):
         'dataset_reference',
         'impersonation_chain',
     )
+    template_fields_renderers = {"dataset_reference": "json"}
     ui_color = BigQueryUIColors.DATASET.value
 
     @apply_defaults
@@ -1391,6 +1398,7 @@ class BigQueryCreateEmptyDatasetOperator(BaseOperator):
         bigquery_conn_id: Optional[str] = None,
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        exists_ok: bool = False,
         **kwargs,
     ) -> None:
 
@@ -1410,10 +1418,11 @@ class BigQueryCreateEmptyDatasetOperator(BaseOperator):
         self.dataset_reference = dataset_reference if dataset_reference else {}
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
+        self.exists_ok = exists_ok
 
         super().__init__(**kwargs)
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         bq_hook = BigQueryHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -1427,7 +1436,7 @@ class BigQueryCreateEmptyDatasetOperator(BaseOperator):
                 dataset_id=self.dataset_id,
                 dataset_reference=self.dataset_reference,
                 location=self.location,
-                exists_ok=False,
+                exists_ok=self.exists_ok,
             )
         except Conflict:
             dataset_id = self.dataset_reference.get("datasetReference", {}).get("datasetId", self.dataset_id)
@@ -1553,7 +1562,7 @@ class BigQueryGetDatasetTablesOperator(BaseOperator):
         dataset_id: str,
         project_id: Optional[str] = None,
         max_results: Optional[int] = None,
-        gcp_conn_id: Optional[str] = 'google_cloud_default',
+        gcp_conn_id: str = 'google_cloud_default',
         delegate_to: Optional[str] = None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
@@ -1623,6 +1632,7 @@ class BigQueryPatchDatasetOperator(BaseOperator):
         'project_id',
         'impersonation_chain',
     )
+    template_fields_renderers = {"dataset_resource": "json"}
     ui_color = BigQueryUIColors.DATASET.value
 
     @apply_defaults
@@ -1665,12 +1675,105 @@ class BigQueryPatchDatasetOperator(BaseOperator):
         )
 
 
+class BigQueryUpdateTableOperator(BaseOperator):
+    """
+    This operator is used to update table for your Project in BigQuery.
+    Use ``fields`` to specify which fields of table to update. If a field
+    is listed in ``fields`` and is ``None`` in table, it will be deleted.
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:BigQueryUpdateTableOperator`
+
+    :param dataset_id: The id of dataset. Don't need to provide,
+        if datasetId in table_reference.
+    :param table_id: The id of table. Don't need to provide,
+        if tableId in table_reference.
+    :type table_id: str
+    :param table_resource: Dataset resource that will be provided with request body.
+        https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#resource
+    :type table_resource: Dict[str, Any]
+    :param fields: The fields of ``table`` to change, spelled as the Table
+        properties (e.g. "friendly_name").
+    :type fields: List[str]
+    :param project_id: The name of the project where we want to create the table.
+        Don't need to provide, if projectId in table_reference.
+    :type project_id: str
+    :param gcp_conn_id: (Optional) The connection ID used to connect to Google Cloud.
+    :type gcp_conn_id: str
+    :param delegate_to: The account to impersonate using domain-wide delegation of authority,
+        if any. For this to work, the service account making the request must have
+        domain-wide delegation enabled.
+    :type delegate_to: str
+    :param impersonation_chain: Optional service account to impersonate using short-term
+        credentials, or chained list of accounts required to get the access_token
+        of the last account in the list, which will be impersonated in the request.
+        If set as a string, the account must grant the originating account
+        the Service Account Token Creator IAM role.
+        If set as a sequence, the identities from the list must grant
+        Service Account Token Creator IAM role to the directly preceding identity, with first
+        account from the list granting this role to the originating account (templated).
+    :type impersonation_chain: Union[str, Sequence[str]]
+
+    :rtype: table
+        https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#resource
+    """
+
+    template_fields = (
+        'dataset_id',
+        'table_id',
+        'project_id',
+        'impersonation_chain',
+    )
+    template_fields_renderers = {"table_resource": "json"}
+    ui_color = BigQueryUIColors.TABLE.value
+
+    @apply_defaults
+    def __init__(
+        self,
+        *,
+        table_resource: Dict[str, Any],
+        fields: Optional[List[str]] = None,
+        dataset_id: Optional[str] = None,
+        table_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        gcp_conn_id: str = 'google_cloud_default',
+        delegate_to: Optional[str] = None,
+        impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        **kwargs,
+    ) -> None:
+        self.dataset_id = dataset_id
+        self.table_id = table_id
+        self.project_id = project_id
+        self.fields = fields
+        self.gcp_conn_id = gcp_conn_id
+        self.table_resource = table_resource
+        self.delegate_to = delegate_to
+        self.impersonation_chain = impersonation_chain
+        super().__init__(**kwargs)
+
+    def execute(self, context):
+        bq_hook = BigQueryHook(
+            gcp_conn_id=self.gcp_conn_id,
+            delegate_to=self.delegate_to,
+            impersonation_chain=self.impersonation_chain,
+        )
+
+        return bq_hook.update_table(
+            table_resource=self.table_resource,
+            fields=self.fields,
+            dataset_id=self.dataset_id,
+            table_id=self.table_id,
+            project_id=self.project_id,
+        )
+
+
 class BigQueryUpdateDatasetOperator(BaseOperator):
     """
     This operator is used to update dataset for your Project in BigQuery.
     Use ``fields`` to specify which fields of dataset to update. If a field
     is listed in ``fields`` and is ``None`` in dataset, it will be deleted.
-    If no ``fields`` are provided then all fields of provided ``dataset_reources``
+    If no ``fields`` are provided then all fields of provided ``dataset_resource``
     will be used.
 
     .. seealso::
@@ -1682,7 +1785,7 @@ class BigQueryUpdateDatasetOperator(BaseOperator):
     :type dataset_id: str
     :param dataset_resource: Dataset resource that will be provided with request body.
         https://cloud.google.com/bigquery/docs/reference/rest/v2/datasets#resource
-    :type dataset_resource: dict
+    :type dataset_resource: Dict[str, Any]
     :param fields: The properties of dataset to change (e.g. "friendly_name").
     :type fields: Sequence[str]
     :param project_id: The name of the project where we want to create the dataset.
@@ -1713,13 +1816,14 @@ class BigQueryUpdateDatasetOperator(BaseOperator):
         'project_id',
         'impersonation_chain',
     )
+    template_fields_renderers = {"dataset_resource": "json"}
     ui_color = BigQueryUIColors.DATASET.value
 
     @apply_defaults
     def __init__(
         self,
         *,
-        dataset_resource: dict,
+        dataset_resource: Dict[str, Any],
         fields: Optional[List[str]] = None,
         dataset_id: Optional[str] = None,
         project_id: Optional[str] = None,
@@ -1828,7 +1932,7 @@ class BigQueryDeleteTableOperator(BaseOperator):
         self.location = location
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         self.log.info('Deleting: %s', self.deletion_dataset_table)
         hook = BigQueryHook(
             gcp_conn_id=self.gcp_conn_id,
@@ -1884,6 +1988,7 @@ class BigQueryUpsertTableOperator(BaseOperator):
         'table_resource',
         'impersonation_chain',
     )
+    template_fields_renderers = {"table_resource": "json"}
     ui_color = BigQueryUIColors.TABLE.value
 
     @apply_defaults
@@ -1919,7 +2024,7 @@ class BigQueryUpsertTableOperator(BaseOperator):
         self.location = location
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         self.log.info('Upserting Dataset: %s with table_resource: %s', self.dataset_id, self.table_resource)
         hook = BigQueryHook(
             bigquery_conn_id=self.gcp_conn_id,
@@ -2001,8 +2106,10 @@ class BigQueryInsertJobOperator(BaseOperator):
         "impersonation_chain",
     )
     template_ext = (".json",)
+    template_fields_renderers = {"configuration": "json"}
     ui_color = BigQueryUIColors.QUERY.value
 
+    @apply_defaults
     def __init__(
         self,
         configuration: Dict[str, Any],
@@ -2033,7 +2140,7 @@ class BigQueryInsertJobOperator(BaseOperator):
     def prepare_template(self) -> None:
         # If .json is passed then we have to read the file
         if isinstance(self.configuration, str) and self.configuration.endswith('.json'):
-            with open(self.configuration, 'r') as file:
+            with open(self.configuration) as file:
                 self.configuration = json.loads(file.read())
 
     def _submit_job(
@@ -2068,8 +2175,9 @@ class BigQueryInsertJobOperator(BaseOperator):
         if self.job_id:
             return f"{self.job_id}_{uniqueness_suffix}"
 
-        exec_date = re.sub(r"\:|-|\+", "_", context['execution_date'].isoformat())
-        return f"airflow_{self.dag_id}_{self.task_id}_{exec_date}_{uniqueness_suffix}"
+        exec_date = context['execution_date'].isoformat()
+        job_id = f"airflow_{self.dag_id}_{self.task_id}_{exec_date}_{uniqueness_suffix}"
+        return re.sub(r"[:\-+.]", "_", job_id)
 
     def execute(self, context: Any):
         hook = BigQueryHook(
@@ -2106,6 +2214,8 @@ class BigQueryInsertJobOperator(BaseOperator):
         self.job_id = job.job_id
         return job.job_id
 
-    def on_kill(self):
+    def on_kill(self) -> None:
         if self.job_id and self.cancel_on_kill:
-            self.hook.cancel_job(job_id=self.job_id, project_id=self.project_id, location=self.location)
+            self.hook.cancel_job(  # type: ignore[union-attr]
+                job_id=self.job_id, project_id=self.project_id, location=self.location
+            )

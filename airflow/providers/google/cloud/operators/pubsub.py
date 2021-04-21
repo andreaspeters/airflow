@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google PubSub operators.
-"""
+"""This module contains Google PubSub operators."""
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -31,7 +29,6 @@ from google.cloud.pubsub_v1.types import (
     ReceivedMessage,
     RetryPolicy,
 )
-from google.protobuf.json_format import MessageToDict
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.pubsub import PubSubHook
@@ -152,7 +149,7 @@ class PubSubCreateTopicOperator(BaseOperator):
         # TODO: remove one day
         if project:
             warnings.warn(
-                "The project parameter has been deprecated. You should pass " "the project_id parameter.",
+                "The project parameter has been deprecated. You should pass the project_id parameter.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -172,7 +169,7 @@ class PubSubCreateTopicOperator(BaseOperator):
         self.metadata = metadata
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = PubSubHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -421,7 +418,7 @@ class PubSubCreateSubscriptionOperator(BaseOperator):
         self.metadata = metadata
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> str:
         hook = PubSubHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -549,7 +546,7 @@ class PubSubDeleteTopicOperator(BaseOperator):
         # TODO: remove one day
         if project:
             warnings.warn(
-                "The project parameter has been deprecated. You should pass " "the project_id parameter.",
+                "The project parameter has been deprecated. You should pass the project_id parameter.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -566,7 +563,7 @@ class PubSubDeleteTopicOperator(BaseOperator):
         self.metadata = metadata
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = PubSubHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -682,7 +679,7 @@ class PubSubDeleteSubscriptionOperator(BaseOperator):
         # TODO: remove one day
         if project:
             warnings.warn(
-                "The project parameter has been deprecated. You should pass " "the project_id parameter.",
+                "The project parameter has been deprecated. You should pass the project_id parameter.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -699,7 +696,7 @@ class PubSubDeleteSubscriptionOperator(BaseOperator):
         self.metadata = metadata
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = PubSubHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -806,7 +803,7 @@ class PubSubPublishMessageOperator(BaseOperator):
         # TODO: remove one day
         if project:
             warnings.warn(
-                "The project parameter has been deprecated. You should pass " "the project_id parameter.",
+                "The project parameter has been deprecated. You should pass the project_id parameter.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -820,7 +817,7 @@ class PubSubPublishMessageOperator(BaseOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = PubSubHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -919,7 +916,7 @@ class PubSubPullOperator(BaseOperator):
         self.messages_callback = messages_callback
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> list:
         hook = PubSubHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -950,7 +947,7 @@ class PubSubPullOperator(BaseOperator):
         self,
         pulled_messages: List[ReceivedMessage],
         context: Dict[str, Any],  # pylint: disable=unused-argument
-    ):
+    ) -> list:
         """
         This method can be overridden by subclasses or by `messages_callback` constructor argument.
         This default implementation converts `ReceivedMessage` objects into JSON-serializable dicts.
@@ -960,7 +957,6 @@ class PubSubPullOperator(BaseOperator):
         :param context: same as in `execute`
         :return: value to be saved to XCom.
         """
-
-        messages_json = [MessageToDict(m) for m in pulled_messages]
+        messages_json = [ReceivedMessage.to_dict(m) for m in pulled_messages]
 
         return messages_json

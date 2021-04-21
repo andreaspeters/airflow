@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-Implements Docker operator
-"""
+"""Implements Docker operator"""
 import ast
 from tempfile import TemporaryDirectory
 from typing import Dict, Iterable, List, Optional, Union
@@ -101,6 +99,8 @@ class DockerOperator(BaseOperator):
     :param volumes: List of volumes to mount into the container, e.g.
         ``['/host/path:/container/path', '/host/path2:/container/path2:ro']``.
     :type volumes: list
+    :param entrypoint: Overwrite the default ENTRYPOINT of the image
+    :type entrypoint: str or list
     :param working_dir: Working directory to
         set on the container (equivalent to the -w switch the docker client)
     :type working_dir: str
@@ -123,6 +123,8 @@ class DockerOperator(BaseOperator):
     :param tty: Allocate pseudo-TTY to the container
         This needs to be set see logs of the Docker container.
     :type tty: bool
+    :param privileged: Give extended privileges to this container.
+    :type privileged: bool
     :param cap_add: Include container capabilities
     :type cap_add: list[str]
     """
@@ -158,6 +160,7 @@ class DockerOperator(BaseOperator):
         tmp_dir: str = '/tmp/airflow',
         user: Optional[Union[str, int]] = None,
         volumes: Optional[List[str]] = None,
+        entrypoint: Optional[Union[str, List[str]]] = None,
         working_dir: Optional[str] = None,
         xcom_all: bool = False,
         docker_conn_id: Optional[str] = None,
@@ -165,7 +168,8 @@ class DockerOperator(BaseOperator):
         dns_search: Optional[List[str]] = None,
         auto_remove: bool = False,
         shm_size: Optional[int] = None,
-        tty: Optional[bool] = False,
+        tty: bool = False,
+        privileged: bool = False,
         cap_add: Optional[Iterable[str]] = None,
         extra_hosts: Optional[Dict[str, str]] = None,
         **kwargs,
@@ -195,11 +199,13 @@ class DockerOperator(BaseOperator):
         self.tmp_dir = tmp_dir
         self.user = user
         self.volumes = volumes or []
+        self.entrypoint = entrypoint
         self.working_dir = working_dir
         self.xcom_all = xcom_all
         self.docker_conn_id = docker_conn_id
         self.shm_size = shm_size
         self.tty = tty
+        self.privileged = privileged
         self.cap_add = cap_add
         self.extra_hosts = extra_hosts
         if kwargs.get('xcom_push') is not None:
@@ -222,18 +228,16 @@ class DockerOperator(BaseOperator):
         )
 
     def _run_image(self) -> Optional[str]:
-        """
-        Run a Docker container with the provided image
-        """
+        """Run a Docker container with the provided image"""
         self.log.info('Starting docker container from image %s', self.image)
 
         with TemporaryDirectory(prefix='airflowtmp', dir=self.host_tmp_dir) as host_tmp_dir:
-            self.volumes.append('{0}:{1}'.format(host_tmp_dir, self.tmp_dir))
+            self.volumes.append(f'{host_tmp_dir}:{self.tmp_dir}')
 
             if not self.cli:
                 raise Exception("The 'cli' should be initialized before!")
             self.container = self.cli.create_container(
-                command=self.get_command(),
+                command=self.format_command(self.command),
                 name=self.container_name,
                 environment={**self.environment, **self._private_environment},
                 host_config=self.cli.create_host_config(
@@ -247,38 +251,46 @@ class DockerOperator(BaseOperator):
                     mem_limit=self.mem_limit,
                     cap_add=self.cap_add,
                     extra_hosts=self.extra_hosts,
+                    privileged=self.privileged,
                 ),
                 image=self.image,
                 user=self.user,
+                entrypoint=self.format_command(self.entrypoint),
                 working_dir=self.working_dir,
                 tty=self.tty,
             )
 
             lines = self.cli.attach(container=self.container['Id'], stdout=True, stderr=True, stream=True)
 
-            self.cli.start(self.container['Id'])
+            try:
+                self.cli.start(self.container['Id'])
 
-            line = ''
-            for line in lines:
-                line = line.strip()
-                if hasattr(line, 'decode'):
-                    # Note that lines returned can also be byte sequences so we have to handle decode here
-                    line = line.decode('utf-8')
-                self.log.info(line)
+                line = ''
+                res_lines = []
+                for line in lines:
+                    line = line.strip()
+                    if hasattr(line, 'decode'):
+                        # Note that lines returned can also be byte sequences so we have to handle decode here
+                        line = line.decode('utf-8')
+                    res_lines.append(line)
+                    self.log.info(line)
 
-            result = self.cli.wait(self.container['Id'])
-            if result['StatusCode'] != 0:
-                raise AirflowException('docker container failed: ' + repr(result))
+                result = self.cli.wait(self.container['Id'])
+                if result['StatusCode'] != 0:
+                    res_lines = "\n".join(res_lines)
+                    raise AirflowException('docker container failed: ' + repr(result) + f"lines {res_lines}")
 
-            # duplicated conditional logic because of expensive operation
-            ret = None
-            if self.do_xcom_push:
-                ret = self.cli.logs(container=self.container['Id']) if self.xcom_all else line.encode('utf-8')
-
-            if self.auto_remove:
-                self.cli.remove_container(self.container['Id'])
-
-            return ret
+                ret = None
+                if self.do_xcom_push:
+                    ret = (
+                        self.cli.logs(container=self.container['Id'])
+                        if self.xcom_all
+                        else line.encode('utf-8')
+                    )
+                return ret
+            finally:
+                if self.auto_remove:
+                    self.cli.remove_container(self.container['Id'])
 
     def execute(self, context) -> Optional[str]:
         self.cli = self._get_cli()
@@ -286,13 +298,24 @@ class DockerOperator(BaseOperator):
             raise Exception("The 'cli' should be initialized before!")
 
         # Pull the docker image if `force_pull` is set or image does not exist locally
+        # pylint: disable=too-many-nested-blocks
         if self.force_pull or not self.cli.images(name=self.image):
             self.log.info('Pulling docker image %s', self.image)
+            latest_status = {}
             for output in self.cli.pull(self.image, stream=True, decode=True):
                 if isinstance(output, str):
                     self.log.info("%s", output)
+                    continue
                 if isinstance(output, dict) and 'status' in output:
-                    self.log.info("%s", output['status'])
+                    output_status = output["status"]
+                    if 'id' not in output:
+                        self.log.info("%s", output_status)
+                        continue
+
+                    output_id = output["id"]
+                    if latest_status.get(output_id) != output_status:
+                        self.log.info("%s: %s", output_id, output_status)
+                        latest_status[output_id] = output_status
 
         self.environment['AIRFLOW_TMP_DIR'] = self.tmp_dir
         return self._run_image()
@@ -304,18 +327,20 @@ class DockerOperator(BaseOperator):
             tls_config = self.__get_tls_config()
             return APIClient(base_url=self.docker_url, version=self.api_version, tls=tls_config)
 
-    def get_command(self) -> Union[List[str], str]:
+    @staticmethod
+    def format_command(command: Union[str, List[str]]) -> Union[List[str], str]:
         """
         Retrieve command(s). if command string starts with [, it returns the command list)
+
+        :param command: Docker command or entrypoint
+        :type command: str | List[str]
 
         :return: the command (or commands)
         :rtype: str | List[str]
         """
-        if isinstance(self.command, str) and self.command.strip().find('[') == 0:
-            commands = ast.literal_eval(self.command)
-        else:
-            commands = self.command
-        return commands
+        if isinstance(command, str) and command.strip().find('[') == 0:
+            return ast.literal_eval(command)
+        return command
 
     def on_kill(self) -> None:
         if self.cli is not None:

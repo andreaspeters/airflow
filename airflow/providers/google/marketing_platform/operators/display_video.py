@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google DisplayVideo operators.
-"""
+"""This module contains Google DisplayVideo operators."""
 import csv
 import json
 import shutil
@@ -94,10 +92,10 @@ class GoogleDisplayVideo360CreateReportOperator(BaseOperator):
     def prepare_template(self) -> None:
         # If .json is passed then we have to read the file
         if isinstance(self.body, str) and self.body.endswith('.json'):
-            with open(self.body, 'r') as file:
+            with open(self.body) as file:
                 self.body = json.load(file)
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> dict:
         hook = GoogleDisplayVideo360Hook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -178,7 +176,7 @@ class GoogleDisplayVideo360DeleteReportOperator(BaseOperator):
         if not (report_name or report_id):
             raise AirflowException("Provide one of the values: `report_name` or `report_id`.")
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> None:
         hook = GoogleDisplayVideo360Hook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -283,7 +281,7 @@ class GoogleDisplayVideo360DownloadReportOperator(BaseOperator):
         bucket = name if not name.startswith("gs://") else name[5:]
         return bucket.strip("/")
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict):
         hook = GoogleDisplayVideo360Hook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -291,7 +289,7 @@ class GoogleDisplayVideo360DownloadReportOperator(BaseOperator):
             impersonation_chain=self.impersonation_chain,
         )
         gcs_hook = GCSHook(
-            google_cloud_storage_conn_id=self.gcp_conn_id,
+            gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
             impersonation_chain=self.impersonation_chain,
         )
@@ -392,7 +390,7 @@ class GoogleDisplayVideo360RunReportOperator(BaseOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> None:
         hook = GoogleDisplayVideo360Hook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -456,7 +454,7 @@ class GoogleDisplayVideo360DownloadLineItemsOperator(BaseOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict) -> str:
+    def execute(self, context: dict) -> str:
         gcs_hook = GCSHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -507,7 +505,7 @@ class GoogleDisplayVideo360UploadLineItemsOperator(BaseOperator):
     :param filename: The filename to fetch.
     :type filename: str,
     :param dry_run: Upload status without actually persisting the line items.
-    :type filename: str,
+    :type dry_run: str,
     """
 
     template_fields = (
@@ -536,7 +534,7 @@ class GoogleDisplayVideo360UploadLineItemsOperator(BaseOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> None:
         gcs_hook = GCSHook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -574,7 +572,7 @@ class GoogleDisplayVideo360CreateSDFDownloadTaskOperator(BaseOperator):
         Check also the official API docs:
         `https://developers.google.com/display-video/api/reference/rest`
 
-    :param version: The SDF version of the downloaded file..
+    :param version: The SDF version of the downloaded file.
     :type version: str
     :param partner_id: The ID of the partner to download SDF for.
     :type partner_id: str
@@ -626,7 +624,7 @@ class GoogleDisplayVideo360CreateSDFDownloadTaskOperator(BaseOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> Dict[str, Any]:
         hook = GoogleDisplayVideo360Hook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
@@ -652,7 +650,7 @@ class GoogleDisplayVideo360SDFtoGCSOperator(BaseOperator):
         Check also the official API docs:
         `https://developers.google.com/display-video/api/reference/rest`
 
-    :param version: The SDF version of the downloaded file..
+    :param version: The SDF version of the downloaded file.
     :type version: str
     :param partner_id: The ID of the partner to download SDF for.
     :type partner_id: str
@@ -712,7 +710,7 @@ class GoogleDisplayVideo360SDFtoGCSOperator(BaseOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict) -> str:
         hook = GoogleDisplayVideo360Hook(
             gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,

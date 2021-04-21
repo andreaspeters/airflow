@@ -18,6 +18,11 @@
 # shellcheck source=scripts/in_container/_in_container_script_init.sh
 . "$( dirname "${BASH_SOURCE[0]}" )/_in_container_script_init.sh"
 
+# Pylint is _very_ unhappy with implicit namespaces, so for this test only, we need to make it not
+trap "rm -f airflow/providers/__init__.py" EXIT
+touch airflow/providers/__init__.py
+
+
 export PYTHONPATH=${AIRFLOW_SOURCES}
 if [[ ${#@} == "0" ]]; then
     echo
@@ -30,7 +35,7 @@ if [[ ${#@} == "0" ]]; then
     # the directory and only excludes it after all of it is scanned
     find . \
     -path "./airflow/www/node_modules" -prune -o \
-    -path "./airflow/www_rbac/node_modules" -prune -o \
+    -path "./airflow/ui/node_modules" -prune -o \
     -path "./airflow/migrations/versions" -prune -o \
     -path "./.eggs" -prune -o \
     -path "./docs/_build" -prune -o \
@@ -38,7 +43,7 @@ if [[ ${#@} == "0" ]]; then
     -name "*.py" \
     -not -name 'webserver_config.py' | \
         grep  ".*.py$" | \
-        grep -vFf scripts/ci/pylint_todo.txt | xargs pylint --output-format=colorized
+        grep -vFf scripts/ci/pylint_todo.txt | sort | xargs pylint -j 0 --output-format=colorized
 else
     /usr/local/bin/pylint --output-format=colorized "$@"
 fi

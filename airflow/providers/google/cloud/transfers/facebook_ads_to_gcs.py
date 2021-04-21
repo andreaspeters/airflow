@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Facebook Ad Reporting to GCS operators.
-"""
+"""This module contains Facebook Ad Reporting to GCS operators."""
 import csv
 import tempfile
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -46,10 +44,10 @@ class FacebookAdsReportToGcsOperator(BaseOperator):
         For more information on how to use this operator, take a look at the guide:
         :ref:`howto/operator:FacebookAdsReportToGcsOperator`
 
-    :param bucket: The GCS bucket to upload to
-    :type bucket: str
-    :param obj: GCS path to save the object. Must be the full file path (ex. `path/to/file.txt`)
-    :type obj: str
+    :param bucket_name: The GCS bucket to upload to
+    :type bucket_name: str
+    :param object_name: GCS path to save the object. Must be the full file path (ex. `path/to/file.txt`)
+    :type object_name: str
     :param gcp_conn_id: Airflow Google Cloud connection ID
     :type gcp_conn_id: str
     :param facebook_conn_id: Airflow Facebook Ads connection ID
@@ -62,8 +60,6 @@ class FacebookAdsReportToGcsOperator(BaseOperator):
     :param params: Parameters that determine the query for Facebook
         https://developers.facebook.com/docs/marketing-api/insights/parameters/v6.0
     :type params: Dict[str, Any]
-    :param sleep_time: Time to sleep when async call is happening
-    :type sleep_time: int
     :param gzip: Option to compress local file or file data for upload
     :type gzip: bool
     :param impersonation_chain: Optional service account to impersonate using short-term
@@ -110,7 +106,7 @@ class FacebookAdsReportToGcsOperator(BaseOperator):
         self.gzip = gzip
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context: Dict):
+    def execute(self, context: dict):
         service = FacebookAdsReportingHook(
             facebook_conn_id=self.facebook_conn_id, api_version=self.api_version
         )

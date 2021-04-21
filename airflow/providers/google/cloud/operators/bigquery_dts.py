@@ -15,13 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google BigQuery Data Transfer Service operators.
-"""
+"""This module contains Google BigQuery Data Transfer Service operators."""
 from typing import Optional, Sequence, Tuple, Union
 
 from google.api_core.retry import Retry
-from google.protobuf.json_format import MessageToDict
+from google.cloud.bigquery_datatransfer_v1 import StartManualTransferRunsResponse, TransferConfig
 
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.bigquery_dts import BiqQueryDataTransferServiceHook, get_object_id
@@ -88,7 +86,7 @@ class BigQueryCreateDataTransferOperator(BaseOperator):
         gcp_conn_id="google_cloud_default",
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.transfer_config = transfer_config
         self.authorization_code = authorization_code
@@ -112,7 +110,7 @@ class BigQueryCreateDataTransferOperator(BaseOperator):
             timeout=self.timeout,
             metadata=self.metadata,
         )
-        result = MessageToDict(response)
+        result = TransferConfig.to_dict(response)
         self.log.info("Created DTS transfer config %s", get_object_id(result))
         self.xcom_push(context, key="transfer_config_id", value=get_object_id(result))
         return result
@@ -172,7 +170,7 @@ class BigQueryDeleteDataTransferConfigOperator(BaseOperator):
         gcp_conn_id="google_cloud_default",
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.project_id = project_id
         self.transfer_config_id = transfer_config_id
@@ -182,7 +180,7 @@ class BigQueryDeleteDataTransferConfigOperator(BaseOperator):
         self.gcp_conn_id = gcp_conn_id
         self.impersonation_chain = impersonation_chain
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = BiqQueryDataTransferServiceHook(
             gcp_conn_id=self.gcp_conn_id, impersonation_chain=self.impersonation_chain
         )
@@ -265,7 +263,7 @@ class BigQueryDataTransferServiceStartTransferRunsOperator(BaseOperator):
         gcp_conn_id="google_cloud_default",
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.project_id = project_id
         self.transfer_config_id = transfer_config_id
@@ -291,10 +289,8 @@ class BigQueryDataTransferServiceStartTransferRunsOperator(BaseOperator):
             timeout=self.timeout,
             metadata=self.metadata,
         )
-        result = MessageToDict(response)
-        run_id = None
-        if 'runs' in result:
-            run_id = get_object_id(result['runs'][0])
-            self.xcom_push(context, key="run_id", value=run_id)
+        result = StartManualTransferRunsResponse.to_dict(response)
+        run_id = get_object_id(result['runs'][0])
+        self.xcom_push(context, key="run_id", value=run_id)
         self.log.info('Transfer run %s submitted successfully.', run_id)
         return result

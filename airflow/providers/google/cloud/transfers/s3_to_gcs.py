@@ -22,7 +22,7 @@ from typing import Iterable, Optional, Sequence, Union
 from airflow.exceptions import AirflowException
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.operators.s3_list import S3ListOperator
-from airflow.providers.google.cloud.hooks.gcs import GCSHook, _parse_gcs_url
+from airflow.providers.google.cloud.hooks.gcs import GCSHook, _parse_gcs_url, gcs_object_is_directory
 from airflow.utils.decorators import apply_defaults
 
 
@@ -30,6 +30,10 @@ class S3ToGCSOperator(S3ListOperator):
     """
     Synchronizes an S3 key, possibly a prefix, with a Google Cloud Storage
     destination path.
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:S3ToGCSOperator`
 
     :param bucket: The S3 bucket where to find the objects. (templated)
     :type bucket: str
@@ -145,14 +149,14 @@ class S3ToGCSOperator(S3ListOperator):
         self.gzip = gzip
         self.google_impersonation_chain = google_impersonation_chain
 
-        if dest_gcs and not self._gcs_object_is_directory(self.dest_gcs):
+        if dest_gcs and not gcs_object_is_directory(self.dest_gcs):
             self.log.info(
                 'Destination Google Cloud Storage path is not a valid '
                 '"directory", define a path that ends with a slash "/" or '
                 'leave it empty for the root of the bucket.'
             )
             raise AirflowException(
-                'The destination Google Cloud Storage path ' 'must end with a slash "/" or be empty.'
+                'The destination Google Cloud Storage path must end with a slash "/" or be empty.'
             )
 
     def execute(self, context):
@@ -160,7 +164,7 @@ class S3ToGCSOperator(S3ListOperator):
         files = super().execute(context)
 
         gcs_hook = GCSHook(
-            google_cloud_storage_conn_id=self.gcp_conn_id,
+            gcp_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to,
             impersonation_chain=self.google_impersonation_chain,
         )
@@ -221,14 +225,6 @@ class S3ToGCSOperator(S3ListOperator):
 
             self.log.info("All done, uploaded %d files to Google Cloud Storage", len(files))
         else:
-            self.log.info('In sync, no files needed to be uploaded to Google Cloud' 'Storage')
+            self.log.info('In sync, no files needed to be uploaded to Google Cloud Storage')
 
         return files
-
-    # Following functionality may be better suited in
-    # airflow/providers/google/cloud/hooks/gcs.py
-    @staticmethod
-    def _gcs_object_is_directory(bucket):
-        _, blob = _parse_gcs_url(bucket)
-
-        return len(blob) == 0 or blob.endswith('/')

@@ -22,7 +22,7 @@ import tenacity
 from requests.auth import HTTPBasicAuth
 
 from airflow.exceptions import AirflowException
-from airflow.hooks.base_hook import BaseHook
+from airflow.hooks.base import BaseHook
 
 
 class HttpHook(BaseHook):
@@ -31,18 +31,23 @@ class HttpHook(BaseHook):
 
     :param method: the API method to be called
     :type method: str
-    :param http_conn_id: connection that has the base API url i.e https://www.google.com/
-        and optional authentication credentials. Default headers can also be specified in
-        the Extra field in json format.
+    :param http_conn_id: :ref:`http connection<howto/connection:http>` that has the base
+        API url i.e https://www.google.com/ and optional authentication credentials. Default
+        headers can also be specified in the Extra field in json format.
     :type http_conn_id: str
     :param auth_type: The auth type for the service
     :type auth_type: AuthBase of python requests lib
     """
 
+    conn_name_attr = 'http_conn_id'
+    default_conn_name = 'http_default'
+    conn_type = 'http'
+    hook_name = 'HTTP'
+
     def __init__(
         self,
         method: str = 'POST',
-        http_conn_id: str = 'http_default',
+        http_conn_id: str = default_conn_name,
         auth_type: Any = HTTPBasicAuth,
     ) -> None:
         super().__init__()
@@ -109,7 +114,7 @@ class HttpHook(BaseHook):
             i.e. {'check_response': False} to avoid checking raising exceptions on non
             2XX or 3XX status codes
         :type extra_options: dict
-        :param  \**request_kwargs: Additional kwargs to pass when creating a request.
+        :param request_kwargs: Additional kwargs to pass when creating a request.
             For example, ``run(json=obj)`` is passed as ``requests.Request(json=obj)``
         """
         extra_options = extra_options or {}

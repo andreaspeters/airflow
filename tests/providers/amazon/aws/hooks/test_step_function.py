@@ -32,7 +32,7 @@ class TestStepFunctionHook(unittest.TestCase):
     @mock_stepfunctions
     def test_get_conn_returns_a_boto3_connection(self):
         hook = StepFunctionHook(aws_conn_id='aws_default')
-        self.assertEqual('stepfunctions', hook.get_conn().meta.service_model.service_name)
+        assert 'stepfunctions' == hook.get_conn().meta.service_model.service_name
 
     @mock_stepfunctions
     def test_start_execution(self):
@@ -41,7 +41,7 @@ class TestStepFunctionHook(unittest.TestCase):
             name='pseudo-state-machine', definition='{}', roleArn='arn:aws:iam::000000000000:role/Role'
         )
 
-        state_machine_arn = state_machine.get('stateMachineArn', None)
+        state_machine_arn = state_machine.get('stateMachineArn')
 
         execution_arn = hook.start_execution(
             state_machine_arn=state_machine_arn, name=None, state_machine_input={}
@@ -56,7 +56,7 @@ class TestStepFunctionHook(unittest.TestCase):
             name='pseudo-state-machine', definition='{}', roleArn='arn:aws:iam::000000000000:role/Role'
         )
 
-        state_machine_arn = state_machine.get('stateMachineArn', None)
+        state_machine_arn = state_machine.get('stateMachineArn')
 
         execution_arn = hook.start_execution(
             state_machine_arn=state_machine_arn, name=None, state_machine_input={}

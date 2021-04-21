@@ -15,17 +15,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google Cloud Storage sensors.
-"""
+"""This module contains Google Cloud Storage sensors."""
 
 import os
+import warnings
 from datetime import datetime
 from typing import Callable, List, Optional, Sequence, Set, Union
 
 from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
-from airflow.sensors.base_sensor_operator import BaseSensorOperator, poke_mode_only
+from airflow.sensors.base import BaseSensorOperator, poke_mode_only
 from airflow.utils.decorators import apply_defaults
 
 
@@ -82,10 +81,10 @@ class GCSObjectExistenceSensor(BaseSensorOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def poke(self, context):
+    def poke(self, context: dict) -> bool:
         self.log.info('Sensor checks existence of : %s, %s', self.bucket, self.object)
         hook = GCSHook(
-            google_cloud_storage_conn_id=self.google_cloud_conn_id,
+            gcp_conn_id=self.google_cloud_conn_id,
             delegate_to=self.delegate_to,
             impersonation_chain=self.impersonation_chain,
         )
@@ -159,17 +158,17 @@ class GCSObjectUpdateSensor(BaseSensorOperator):
         self.delegate_to = delegate_to
         self.impersonation_chain = impersonation_chain
 
-    def poke(self, context):
+    def poke(self, context: dict) -> bool:
         self.log.info('Sensor checks existence of : %s, %s', self.bucket, self.object)
         hook = GCSHook(
-            google_cloud_storage_conn_id=self.google_cloud_conn_id,
+            gcp_conn_id=self.google_cloud_conn_id,
             delegate_to=self.delegate_to,
             impersonation_chain=self.impersonation_chain,
         )
         return hook.is_updated_after(self.bucket, self.object, self.ts_func(context))
 
 
-class GCSObjectsWtihPrefixExistenceSensor(BaseSensorOperator):
+class GCSObjectsWithPrefixExistenceSensor(BaseSensorOperator):
     """
     Checks for the existence of GCS objects at a given prefix, passing matches via XCom.
 
@@ -222,23 +221,39 @@ class GCSObjectsWtihPrefixExistenceSensor(BaseSensorOperator):
         self.prefix = prefix
         self.google_cloud_conn_id = google_cloud_conn_id
         self.delegate_to = delegate_to
-        self._matches = []  # type: List[str]
+        self._matches: List[str] = []
         self.impersonation_chain = impersonation_chain
 
-    def poke(self, context):
+    def poke(self, context: dict) -> bool:
         self.log.info('Sensor checks existence of objects: %s, %s', self.bucket, self.prefix)
         hook = GCSHook(
-            google_cloud_storage_conn_id=self.google_cloud_conn_id,
+            gcp_conn_id=self.google_cloud_conn_id,
             delegate_to=self.delegate_to,
             impersonation_chain=self.impersonation_chain,
         )
         self._matches = hook.list(self.bucket, prefix=self.prefix)
         return bool(self._matches)
 
-    def execute(self, context):
+    def execute(self, context: dict) -> List[str]:
         """Overridden to allow matches to be passed"""
         super().execute(context)
         return self._matches
+
+
+class GCSObjectsWtihPrefixExistenceSensor(GCSObjectsWithPrefixExistenceSensor):
+    """
+    This class is deprecated.
+    Please use `airflow.providers.google.cloud.sensors.gcs.GCSObjectsWithPrefixExistenceSensor`.
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            """This class is deprecated.
+            Please use `airflow.providers.google.cloud.sensors.gcs.GCSObjectsWithPrefixExistenceSensor`.""",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        super().__init__(*args, **kwargs)
 
 
 def get_time():
@@ -332,9 +347,9 @@ class GCSUploadSessionCompleteSensor(BaseSensorOperator):
         self.delegate_to = delegate_to
         self.last_activity_time = None
         self.impersonation_chain = impersonation_chain
-        self.hook = None
+        self.hook: Optional[GCSHook] = None
 
-    def _get_gcs_hook(self):
+    def _get_gcs_hook(self) -> Optional[GCSHook]:
         if not self.hook:
             self.hook = GCSHook(
                 gcp_conn_id=self.google_cloud_conn_id,
@@ -416,5 +431,7 @@ class GCSUploadSessionCompleteSensor(BaseSensorOperator):
             return False
         return False
 
-    def poke(self, context):
-        return self.is_bucket_updated(set(self._get_gcs_hook().list(self.bucket, prefix=self.prefix)))
+    def poke(self, context: dict) -> bool:
+        return self.is_bucket_updated(
+            set(self._get_gcs_hook().list(self.bucket, prefix=self.prefix))  # type: ignore[union-attr]
+        )

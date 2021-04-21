@@ -17,10 +17,10 @@
 # specific language governing permissions and limitations
 # under the License.
 import unittest
+from unittest.mock import MagicMock, patch
 
 from google.api_core.exceptions import NotFound
 from google.cloud.secretmanager_v1.proto.service_pb2 import AccessSecretVersionResponse
-from mock import MagicMock, patch
 
 from airflow.providers.google.cloud.hooks.secret_manager import SecretsManagerHook
 from tests.providers.google.cloud.utils.base_gcp_mock import (
@@ -48,7 +48,7 @@ class TestSecretsManagerHook(unittest.TestCase):
         secret = secrets_manager_hook.get_secret(secret_id="secret")
         mock_client.secret_version_path.assert_called_once_with('example-project', 'secret', 'latest')
         mock_client.access_secret_version.assert_called_once_with("full-path")
-        self.assertIsNone(secret)
+        assert secret is None
 
     @patch(INTERNAL_CLIENT_PACKAGE + "._SecretManagerClient.client", return_value=MagicMock())
     @patch(
@@ -59,11 +59,11 @@ class TestSecretsManagerHook(unittest.TestCase):
     def test_get_existing_key(self, mock_get_credentials, mock_client):
         mock_client.secret_version_path.return_value = "full-path"
         test_response = AccessSecretVersionResponse()
-        test_response.payload.data = "result".encode("UTF-8")
+        test_response.payload.data = b"result"
         mock_client.access_secret_version.return_value = test_response
         secrets_manager_hook = SecretsManagerHook(gcp_conn_id='test')
         mock_get_credentials.assert_called_once_with()
         secret = secrets_manager_hook.get_secret(secret_id="secret")
         mock_client.secret_version_path.assert_called_once_with('example-project', 'secret', 'latest')
         mock_client.access_secret_version.assert_called_once_with("full-path")
-        self.assertEqual("result", secret)
+        assert "result" == secret

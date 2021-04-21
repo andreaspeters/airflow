@@ -25,10 +25,6 @@ from airflow.utils.decorators import apply_defaults
 class DataprocCreateClusterOperator(BaseOperator):
     """Creates Yandex.Cloud Data Proc cluster.
 
-    .. seealso::
-        For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:DataprocCreateClusterOperator`
-
     :param folder_id: ID of the folder in which cluster should be created.
     :type folder_id: Optional[str]
     :param cluster_name: Cluster name. Must be unique inside the folder.
@@ -108,7 +104,7 @@ class DataprocCreateClusterOperator(BaseOperator):
         computenode_count: int = 0,
         connection_id: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.folder_id = folder_id
         self.connection_id = connection_id
@@ -132,9 +128,9 @@ class DataprocCreateClusterOperator(BaseOperator):
         self.computenode_disk_size = computenode_disk_size
         self.computenode_disk_type = computenode_disk_type
         self.computenode_count = computenode_count
-        self.hook = None
+        self.hook: Optional[DataprocHook] = None
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         self.hook = DataprocHook(
             connection_id=self.connection_id,
         )
@@ -169,7 +165,7 @@ class DataprocDeleteClusterOperator(BaseOperator):
     """Deletes Yandex.Cloud Data Proc cluster.
 
     :param connection_id: ID of the Yandex.Cloud Airflow connection.
-    :type cluster_id: Optional[str]
+    :type connection_id: Optional[str]
     :param cluster_id: ID of the cluster to remove. (templated)
     :type cluster_id: Optional[str]
     """
@@ -177,13 +173,15 @@ class DataprocDeleteClusterOperator(BaseOperator):
     template_fields = ['cluster_id']
 
     @apply_defaults
-    def __init__(self, *, connection_id: Optional[str] = None, cluster_id: Optional[str] = None, **kwargs):
+    def __init__(
+        self, *, connection_id: Optional[str] = None, cluster_id: Optional[str] = None, **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.connection_id = connection_id
         self.cluster_id = cluster_id
-        self.hook = None
+        self.hook: Optional[DataprocHook] = None
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         cluster_id = self.cluster_id or context['task_instance'].xcom_pull(key='cluster_id')
         connection_id = self.connection_id or context['task_instance'].xcom_pull(
             key='yandexcloud_connection_id'
@@ -232,7 +230,7 @@ class DataprocCreateHiveJobOperator(BaseOperator):
         cluster_id: Optional[str] = None,
         connection_id: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.query = query
         self.query_file_uri = query_file_uri
@@ -242,9 +240,9 @@ class DataprocCreateHiveJobOperator(BaseOperator):
         self.name = name
         self.cluster_id = cluster_id
         self.connection_id = connection_id
-        self.hook = None
+        self.hook: Optional[DataprocHook] = None
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         cluster_id = self.cluster_id or context['task_instance'].xcom_pull(key='cluster_id')
         connection_id = self.connection_id or context['task_instance'].xcom_pull(
             key='yandexcloud_connection_id'
@@ -268,7 +266,7 @@ class DataprocCreateMapReduceJobOperator(BaseOperator):
 
     :param main_jar_file_uri: URI of jar file with job.
                               Can be placed in HDFS or S3. Can be specified instead of main_class.
-    :type main_class: Optional[str]
+    :type main_jar_file_uri: Optional[str]
     :param main_class: Name of the main class of the job. Can be specified instead of main_jar_file_uri.
     :type main_class: Optional[str]
     :param file_uris: URIs of files used in the job. Can be placed in HDFS or S3.
@@ -276,7 +274,7 @@ class DataprocCreateMapReduceJobOperator(BaseOperator):
     :param archive_uris: URIs of archive files used in the job. Can be placed in HDFS or S3.
     :type archive_uris: Optional[Iterable[str]]
     :param jar_file_uris: URIs of JAR files used in the job. Can be placed in HDFS or S3.
-    :type archive_uris: Optional[Iterable[str]]
+    :type jar_file_uris: Optional[Iterable[str]]
     :param properties: Properties for the job.
     :type properties: Optional[Dist[str, str]]
     :param args: Arguments to be passed to the job.
@@ -308,7 +306,7 @@ class DataprocCreateMapReduceJobOperator(BaseOperator):
         cluster_id: Optional[str] = None,
         connection_id: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.main_class = main_class
         self.main_jar_file_uri = main_jar_file_uri
@@ -320,9 +318,9 @@ class DataprocCreateMapReduceJobOperator(BaseOperator):
         self.name = name
         self.cluster_id = cluster_id
         self.connection_id = connection_id
-        self.hook = None
+        self.hook: Optional[DataprocHook] = None
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         cluster_id = self.cluster_id or context['task_instance'].xcom_pull(key='cluster_id')
         connection_id = self.connection_id or context['task_instance'].xcom_pull(
             key='yandexcloud_connection_id'
@@ -347,7 +345,7 @@ class DataprocCreateSparkJobOperator(BaseOperator):
     """Runs Spark job in Data Proc cluster.
 
     :param main_jar_file_uri: URI of jar file with job. Can be placed in HDFS or S3.
-    :type main_class: Optional[str]
+    :type main_jar_file_uri: Optional[str]
     :param main_class: Name of the main class of the job.
     :type main_class: Optional[str]
     :param file_uris: URIs of files used in the job. Can be placed in HDFS or S3.
@@ -355,7 +353,7 @@ class DataprocCreateSparkJobOperator(BaseOperator):
     :param archive_uris: URIs of archive files used in the job. Can be placed in HDFS or S3.
     :type archive_uris: Optional[Iterable[str]]
     :param jar_file_uris: URIs of JAR files used in the job. Can be placed in HDFS or S3.
-    :type archive_uris: Optional[Iterable[str]]
+    :type jar_file_uris: Optional[Iterable[str]]
     :param properties: Properties for the job.
     :type properties: Optional[Dist[str, str]]
     :param args: Arguments to be passed to the job.
@@ -387,7 +385,7 @@ class DataprocCreateSparkJobOperator(BaseOperator):
         cluster_id: Optional[str] = None,
         connection_id: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.main_class = main_class
         self.main_jar_file_uri = main_jar_file_uri
@@ -399,9 +397,9 @@ class DataprocCreateSparkJobOperator(BaseOperator):
         self.name = name
         self.cluster_id = cluster_id
         self.connection_id = connection_id
-        self.hook = None
+        self.hook: Optional[DataprocHook] = None
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         cluster_id = self.cluster_id or context['task_instance'].xcom_pull(key='cluster_id')
         connection_id = self.connection_id or context['task_instance'].xcom_pull(
             key='yandexcloud_connection_id'
@@ -434,7 +432,7 @@ class DataprocCreatePysparkJobOperator(BaseOperator):
     :param archive_uris: URIs of archive files used in the job. Can be placed in HDFS or S3.
     :type archive_uris: Optional[Iterable[str]]
     :param jar_file_uris: URIs of JAR files used in the job. Can be placed in HDFS or S3.
-    :type archive_uris: Optional[Iterable[str]]
+    :type jar_file_uris: Optional[Iterable[str]]
     :param properties: Properties for the job.
     :type properties: Optional[Dist[str, str]]
     :param args: Arguments to be passed to the job.
@@ -466,7 +464,7 @@ class DataprocCreatePysparkJobOperator(BaseOperator):
         cluster_id: Optional[str] = None,
         connection_id: Optional[str] = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.main_python_file_uri = main_python_file_uri
         self.python_file_uris = python_file_uris
@@ -478,9 +476,9 @@ class DataprocCreatePysparkJobOperator(BaseOperator):
         self.name = name
         self.cluster_id = cluster_id
         self.connection_id = connection_id
-        self.hook = None
+        self.hook: Optional[DataprocHook] = None
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         cluster_id = self.cluster_id or context['task_instance'].xcom_pull(key='cluster_id')
         connection_id = self.connection_id or context['task_instance'].xcom_pull(
             key='yandexcloud_connection_id'

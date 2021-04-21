@@ -15,9 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""
-This module contains the Apache Livy operator.
-"""
+"""This module contains the Apache Livy operator."""
 from time import sleep
 from typing import Any, Dict, Optional, Sequence, Union
 
@@ -68,6 +66,8 @@ class LivyOperator(BaseOperator):
     :type livy_conn_id: str
     :param polling_interval: time in seconds between polling for job completion. Don't poll for values >=0
     :type polling_interval: int
+    :type extra_options: A dictionary of options, where key is string and value
+        depends on the option that's being modified.
     """
 
     template_fields = ('spark_params',)
@@ -94,6 +94,7 @@ class LivyOperator(BaseOperator):
         proxy_user: Optional[str] = None,
         livy_conn_id: str = 'livy_default',
         polling_interval: int = 0,
+        extra_options: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         # pylint: disable-msg=too-many-arguments
@@ -121,6 +122,7 @@ class LivyOperator(BaseOperator):
 
         self._livy_conn_id = livy_conn_id
         self._polling_interval = polling_interval
+        self._extra_options = extra_options or {}
 
         self._livy_hook: Optional[LivyHook] = None
         self._batch_id: Union[int, str]
@@ -133,7 +135,7 @@ class LivyOperator(BaseOperator):
         :rtype: LivyHook
         """
         if self._livy_hook is None or not isinstance(self._livy_hook, LivyHook):
-            self._livy_hook = LivyHook(livy_conn_id=self._livy_conn_id)
+            self._livy_hook = LivyHook(livy_conn_id=self._livy_conn_id, extra_options=self._extra_options)
         return self._livy_hook
 
     def execute(self, context: Dict[Any, Any]) -> Any:
@@ -159,14 +161,12 @@ class LivyOperator(BaseOperator):
             state = hook.get_batch_state(batch_id)
         self.log.info("Batch with id %s terminated with state: %s", batch_id, state.value)
         if state != BatchState.SUCCESS:
-            raise AirflowException("Batch {} did not succeed".format(batch_id))
+            raise AirflowException(f"Batch {batch_id} did not succeed")
 
     def on_kill(self) -> None:
         self.kill()
 
     def kill(self) -> None:
-        """
-        Delete the current batch session.
-        """
+        """Delete the current batch session."""
         if self._batch_id is not None:
             self.get_hook().delete_batch(self._batch_id)

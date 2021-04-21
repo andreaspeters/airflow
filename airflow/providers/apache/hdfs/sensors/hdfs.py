@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Pattern, Type
 
 from airflow import settings
 from airflow.providers.apache.hdfs.hooks.hdfs import HDFSHook
-from airflow.sensors.base_sensor_operator import BaseSensorOperator
+from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
 
 log = logging.getLogger(__name__)
@@ -31,6 +31,10 @@ log = logging.getLogger(__name__)
 class HdfsSensor(BaseSensorOperator):
     """
     Waits for a file or folder to land in HDFS
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:HdfsSensor`
     """
 
     template_fields = ('filepath',)
@@ -126,6 +130,10 @@ class HdfsSensor(BaseSensorOperator):
 class HdfsRegexSensor(HdfsSensor):
     """
     Waits for matching files by matching on regex
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:HdfsRegexSensor`
     """
 
     def __init__(self, regex: Pattern[str], *args: Any, **kwargs: Any) -> None:
@@ -145,7 +153,7 @@ class HdfsRegexSensor(HdfsSensor):
         result = [
             f
             for f in sb_client.ls([self.filepath], include_toplevel=False)
-            if f['file_type'] == 'f' and self.regex.match(f['path'].replace('%s/' % self.filepath, ''))
+            if f['file_type'] == 'f' and self.regex.match(f['path'].replace(f'{self.filepath}/', ''))
         ]
         result = self.filter_for_ignored_ext(result, self.ignored_ext, self.ignore_copying)
         result = self.filter_for_filesize(result, self.file_size)
@@ -155,6 +163,10 @@ class HdfsRegexSensor(HdfsSensor):
 class HdfsFolderSensor(HdfsSensor):
     """
     Waits for a non-empty directory
+
+    .. seealso::
+        For more information on how to use this operator, take a look at the guide:
+        :ref:`howto/operator:HdfsFolderSensor`
     """
 
     def __init__(self, be_empty: bool = False, *args: Any, **kwargs: Any):

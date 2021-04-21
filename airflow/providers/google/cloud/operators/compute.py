@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google Compute Engine operators.
-"""
+"""This module contains Google Compute Engine operators."""
 
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -34,9 +32,7 @@ from airflow.utils.decorators import apply_defaults
 
 
 class ComputeEngineBaseOperator(BaseOperator):
-    """
-    Abstract base operator for Google Compute Engine operators to inherit from.
-    """
+    """Abstract base operator for Google Compute Engine operators to inherit from."""
 
     @apply_defaults
     def __init__(
@@ -59,7 +55,7 @@ class ComputeEngineBaseOperator(BaseOperator):
         self._validate_inputs()
         super().__init__(**kwargs)
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         if self.project_id == '':
             raise AirflowException("The required parameter 'project_id' is missing")
         if not self.zone:
@@ -93,8 +89,6 @@ class ComputeEngineStartInstanceOperator(ComputeEngineBaseOperator):
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
     :type api_version: str
-    :param validate_body: Optional, If set to False, body validation is not performed.
-        Defaults to False.
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -139,7 +133,7 @@ class ComputeEngineStartInstanceOperator(ComputeEngineBaseOperator):
             **kwargs,
         )
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -170,8 +164,6 @@ class ComputeEngineStopInstanceOperator(ComputeEngineBaseOperator):
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
     :type api_version: str
-    :param validate_body: Optional, If set to False, body validation is not performed.
-        Defaults to False.
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -216,7 +208,7 @@ class ComputeEngineStopInstanceOperator(ComputeEngineBaseOperator):
             **kwargs,
         )
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -312,11 +304,11 @@ class ComputeEngineSetMachineTypeOperator(ComputeEngineBaseOperator):
             **kwargs,
         )
 
-    def _validate_all_body_fields(self):
+    def _validate_all_body_fields(self) -> None:
         if self._field_validator:
             self._field_validator.validate(self.body)
 
-    def execute(self, context):
+    def execute(self, context) -> None:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -359,7 +351,7 @@ GCE_INSTANCE_TEMPLATE_VALIDATION_PATCH_SPECIFICATION = [
                     dict(name="onHostMaintenance", optional=True),
                     dict(name="automaticRestart", optional=True),
                     dict(name="preemptible", optional=True),
-                    dict(name="nodeAffinitites", optional=True),  # not validating deeper
+                    dict(name="nodeAffinities", optional=True),  # not validating deeper
                 ],
             ),
             dict(name="labels", optional=True),
@@ -482,11 +474,11 @@ class ComputeEngineCopyInstanceTemplateOperator(ComputeEngineBaseOperator):
             **kwargs,
         )
 
-    def _validate_all_body_fields(self):
+    def _validate_all_body_fields(self) -> None:
         if self._field_validator:
             self._field_validator.validate(self.body_patch)
 
-    def execute(self, context):
+    def execute(self, context) -> dict:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,
@@ -557,9 +549,6 @@ class ComputeEngineInstanceGroupUpdateManagerTemplateOperator(ComputeEngineBaseO
     :param api_version: Optional, API version used (for example v1 - or beta). Defaults
         to v1.
     :type api_version: str
-    :param validate_body: Optional, If set to False, body validation is not performed.
-        Defaults to False.
-    :type validate_body: bool
     :param impersonation_chain: Optional service account to impersonate using short-term
         credentials, or chained list of accounts required to get the access_token
         of the last account in the list, which will be impersonated in the request.
@@ -623,12 +612,12 @@ class ComputeEngineInstanceGroupUpdateManagerTemplateOperator(ComputeEngineBaseO
             **kwargs,
         )
 
-    def _possibly_replace_template(self, dictionary: Dict) -> None:
+    def _possibly_replace_template(self, dictionary: dict) -> None:
         if dictionary.get('instanceTemplate') == self.source_template:
             dictionary['instanceTemplate'] = self.destination_template
             self._change_performed = True
 
-    def execute(self, context):
+    def execute(self, context) -> Optional[bool]:
         hook = ComputeEngineHook(
             gcp_conn_id=self.gcp_conn_id,
             api_version=self.api_version,

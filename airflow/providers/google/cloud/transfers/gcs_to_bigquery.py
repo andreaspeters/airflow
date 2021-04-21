@@ -15,9 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains a Google Cloud Storage to BigQuery operator.
-"""
+"""This module contains a Google Cloud Storage to BigQuery operator."""
 
 import json
 from typing import Optional, Sequence, Union
@@ -131,8 +129,8 @@ class GCSToBigQueryOperator(BaseOperator):
         dataset.table$partition.
     :type time_partitioning: dict
     :param cluster_fields: Request that the result of this load be stored sorted
-        by one or more columns. This is only available in conjunction with
-        time_partitioning. The order of columns given determines the sort order.
+        by one or more columns. BigQuery supports clustering for both partitioned and
+        non-partitioned tables. The order of columns given determines the sort order.
         Not applicable for external tables.
     :type cluster_fields: list[str]
     :param autodetect: [Optional] Indicates if we should automatically infer the
@@ -159,6 +157,10 @@ class GCSToBigQueryOperator(BaseOperator):
         Service Account Token Creator IAM role to the directly preceding identity, with first
         account from the list granting this role to the originating account (templated).
     :type impersonation_chain: Union[str, Sequence[str]]
+    :param labels: [Optional] Labels for the BiqQuery table.
+    :type labels: dict
+    :param description: [Optional] Description for the BigQuery table.
+    :type description: str
     """
 
     template_fields = (
@@ -206,6 +208,8 @@ class GCSToBigQueryOperator(BaseOperator):
         encryption_configuration=None,
         location=None,
         impersonation_chain: Optional[Union[str, Sequence[str]]] = None,
+        labels=None,
+        description=None,
         **kwargs,
     ):
 
@@ -251,6 +255,9 @@ class GCSToBigQueryOperator(BaseOperator):
         self.location = location
         self.impersonation_chain = impersonation_chain
 
+        self.labels = labels
+        self.description = description
+
     def execute(self, context):
         bq_hook = BigQueryHook(
             bigquery_conn_id=self.bigquery_conn_id,
@@ -262,14 +269,18 @@ class GCSToBigQueryOperator(BaseOperator):
         if not self.schema_fields:
             if self.schema_object and self.source_format != 'DATASTORE_BACKUP':
                 gcs_hook = GCSHook(
-                    google_cloud_storage_conn_id=self.google_cloud_storage_conn_id,
+                    gcp_conn_id=self.google_cloud_storage_conn_id,
                     delegate_to=self.delegate_to,
                     impersonation_chain=self.impersonation_chain,
                 )
-                schema_fields = json.loads(gcs_hook.download(self.bucket, self.schema_object).decode("utf-8"))
+                blob = gcs_hook.download(
+                    bucket_name=self.bucket,
+                    object_name=self.schema_object,
+                )
+                schema_fields = json.loads(blob.decode("utf-8"))
             elif self.schema_object is None and self.autodetect is False:
                 raise AirflowException(
-                    'At least one of `schema_fields`, ' '`schema_object`, or `autodetect` must be passed.'
+                    'At least one of `schema_fields`, `schema_object`, or `autodetect` must be passed.'
                 )
             else:
                 schema_fields = None
@@ -277,9 +288,7 @@ class GCSToBigQueryOperator(BaseOperator):
         else:
             schema_fields = self.schema_fields
 
-        source_uris = [
-            'gs://{}/{}'.format(self.bucket, source_object) for source_object in self.source_objects
-        ]
+        source_uris = [f'gs://{self.bucket}/{source_object}' for source_object in self.source_objects]
         conn = bq_hook.get_conn()
         cursor = conn.cursor()
 
@@ -300,6 +309,8 @@ class GCSToBigQueryOperator(BaseOperator):
                 encoding=self.encoding,
                 src_fmt_configs=self.src_fmt_configs,
                 encryption_configuration=self.encryption_configuration,
+                labels=self.labels,
+                description=self.description,
             )
         else:
             cursor.run_load(
@@ -323,6 +334,8 @@ class GCSToBigQueryOperator(BaseOperator):
                 time_partitioning=self.time_partitioning,
                 cluster_fields=self.cluster_fields,
                 encryption_configuration=self.encryption_configuration,
+                labels=self.labels,
+                description=self.description,
             )
 
         if cursor.use_legacy_sql:
@@ -331,7 +344,7 @@ class GCSToBigQueryOperator(BaseOperator):
             escaped_table_name = f'`{self.destination_project_dataset_table}`'
 
         if self.max_id_key:
-            cursor.execute('SELECT MAX({}) FROM {}'.format(self.max_id_key, escaped_table_name))
+            cursor.execute(f'SELECT MAX({self.max_id_key}) FROM {escaped_table_name}')
             row = cursor.fetchone()
             max_id = row[0] if row[0] else 0
             self.log.info(
